@@ -1,0 +1,67 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# 📦 Dependencies & Package Managers
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+pnpm-lock.yaml
+yarn.lock
+
+# 🧪 Testing & Code Coverage Outputs
+/coverage
+
+# 🚀 Next.js Framework Compilation Artifacts
+/.next/
+/out/
+
+# 🏗️ Production Build Enclaves
+/build
+/dist
+
+# ⚙️ Editor Workspace Preferences & Local Overrides
+# Hides local settings but allows tracking shared team tasks if added later
+.idea/
+.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# 🛰️ System Log Overflows & Garbage Collection Piles
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+*.pem
+*.key
+*.log
+
+# 🐛 Debug Traces
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# 🔒 Cryptographic Environment & Secret Matrix Firewalls
+# Safely blocks all real secret files while explicitly preserving your setup guide template!
+.env
+.env.local
+.env.production
+.env.development
+.env.test
+.env*.local
+!.env.example
+
+# 🌩️ Hosting & Cloud Platform State Caches
+.vercel
+.turbo
