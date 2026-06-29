@@ -39,10 +39,14 @@ app.use(cookieParser());
 
 // Optimized CORS configuration gateway to clear preflight handshakes
 app.use(cors({
-  origin: [process.env.FRONTEND_URL || 'http://localhost:3000', 'https://med-vault-beige.vercel.app'],// Dynamic alignment
-  credentials: true, // Clears passing secure HTTP-Only cookies across origin lines
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
+    origin: (origin, callback) => {
+        if (!origin || origin.endsWith('.vercel.app') || origin === 'http://localhost:3000') {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true
 }));
 
 // ==========================================
