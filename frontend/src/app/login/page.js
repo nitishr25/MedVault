@@ -2,13 +2,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '../../lib/api';
-import { 
-  Shield, 
-  KeyRound, 
-  Mail, 
-  CheckCircle2, 
-  AlertCircle, 
-  ArrowRight, 
+import {
+  Shield,
+  KeyRound,
+  Mail,
+  CheckCircle2,
+  AlertCircle,
+  ArrowRight,
   Fingerprint,
   Sparkles,
   Eye,
@@ -21,6 +21,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [demoLoadingRole, setDemoLoadingRole] = useState(null);
 
   // PREMIUM TOAST STATE MANAGEMENT
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -43,23 +44,23 @@ export default function LoginPage() {
     try {
       // Clean and lowercase credentials before flight to prevent auth schema rejections
       const processedEmail = email.trim().toLowerCase();
-      
-      const res = await api.post('/auth/login', { 
-        email: processedEmail, 
-        password: password 
+
+      const res = await api.post('/auth/login', {
+        email: processedEmail,
+        password: password
       });
-      
+
       // CRITICAL FIX: Extract both the token AND the explicit user data package (including role)
       if (res.data?.token) {
         localStorage.setItem('token', res.data.token);
-        
+
         if (res.data.user) {
           // Store complete profile metadata string so the dashboard knows the user's role instantly
           localStorage.setItem('user', JSON.stringify(res.data.user));
         }
 
         triggerToast(res.data.message || 'Cryptographic identity verified. Syncing terminal node...');
-        
+
         // 1.2-second strategic delay lets the user appreciate the success state before route jump
         setTimeout(() => {
           router.push('/dashboard');
@@ -77,17 +78,53 @@ export default function LoginPage() {
     }
   };
 
+  // 🎭 Demo Mode: signs straight into a pre-seeded sandbox account (see backend/seed.js)
+  // so people can explore MedVault without registering. The demo doctor account is
+  // pre-approved, so it skips the normal hospital-admin verification wait entirely.
+  const demoCredentials = {
+    patient: { email: 'patient@demo.com', password: 'MedVaultDemo@2026' },
+    doctor: { email: 'doctor@demo.com', password: 'MedVaultDemo@2026' },
+    admin: { email: 'admin@demo.com', password: 'MedVaultDemo@2026' }
+  };
+
+  const handleDemoLogin = async (role) => {
+    setDemoLoadingRole(role);
+    try {
+      // Reuses the same authenticated `api` client (correct base URL + credentials)
+      // as the real login form above, instead of a hardcoded localhost fetch.
+      const res = await api.post('/auth/login', demoCredentials[role]);
+
+      if (res.data?.token) {
+        localStorage.setItem('token', res.data.token);
+        if (res.data.user) {
+          localStorage.setItem('user', JSON.stringify(res.data.user));
+        }
+        triggerToast(`Signed in to the ${role === 'admin' ? 'Hospital Admin' : role} demo account. Loading dashboard...`);
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 900);
+      } else {
+        triggerToast('Demo login failed. Please try again.', 'error');
+      }
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || 'Could not reach the demo sandbox. Please try again shortly.';
+      triggerToast(errorMessage, 'error');
+      console.error('❌ Demo login error:', err);
+    } finally {
+      setDemoLoadingRole(null);
+    }
+  };
+
   return (
     <div className="relative min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center overflow-hidden p-4 font-sans selection:bg-teal-500 selection:text-slate-950">
-      
+
       {/* FLOATING GLASSMORPHIC TOAST PANEL */}
       {toast.show && (
         <div className="fixed top-6 right-6 z-50 animate-in fade-in slide-in-from-top-6 duration-300">
-          <div className={`flex items-center gap-3 px-6 py-4 rounded-xl border backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] min-w-[340px] max-w-md transition-all ${
-            toast.type === 'success' 
-              ? 'bg-emerald-950/80 border-emerald-500/30 text-emerald-300 shadow-emerald-950/20' 
+          <div className={`flex items-center gap-3 px-6 py-4 rounded-xl border backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] w-full max-w-md transition-all ${toast.type === 'success'
+              ? 'bg-emerald-950/80 border-emerald-500/30 text-emerald-300 shadow-emerald-950/20'
               : 'bg-red-950/80 border-red-500/30 text-red-300 shadow-red-950/20'
-          }`}>
+            }`}>
             {toast.type === 'success' ? (
               <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
             ) : (
@@ -115,7 +152,7 @@ export default function LoginPage() {
       {/* CENTRAL IDENTITY CONTROL INTERFACE CARD */}
       <div className="relative z-10 w-full max-w-md bg-slate-900/30 backdrop-blur-2xl border border-slate-900 rounded-2xl p-8 shadow-[0_30px_100px_rgba(0,0,0,0.8)] space-y-6 group">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-800 to-transparent group-hover:via-teal-500/30 transition-all duration-700" />
-        
+
         {/* Core Header Branding */}
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center rounded-xl bg-gradient-to-br from-teal-500/10 to-blue-500/10 p-3 ring-1 ring-teal-500/20 shadow-inner group-hover:scale-105 transition-transform duration-500">
@@ -130,7 +167,7 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleLoginSubmit} className="space-y-4">
-          
+
           {/* Identity input */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-400 tracking-wider uppercase block">
@@ -138,14 +175,14 @@ export default function LoginPage() {
             </label>
             <div className="relative group/input">
               <Mail className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-600 group-focus-within/input:text-teal-400 transition-colors" />
-              <input 
-                type="email" 
+              <input
+                type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Registered e-mail address"
                 className="h-11 w-full rounded-xl border border-slate-900 bg-slate-950/80 pl-11 pr-4 text-white text-sm placeholder:text-slate-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/20 transition-all"
                 disabled={isLoading}
-                required 
+                required
               />
             </div>
           </div>
@@ -157,14 +194,14 @@ export default function LoginPage() {
             </label>
             <div className="relative group/input">
               <KeyRound className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-600 group-focus-within/input:text-teal-400 transition-colors" />
-              <input 
-                type={showPassword ? "text" : "password"} 
+              <input
+                type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter password"
                 className="h-11 w-full rounded-xl border border-slate-900 bg-slate-950/80 pl-11 pr-11 text-white text-sm placeholder:text-slate-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/20 transition-all"
                 disabled={isLoading}
-                required 
+                required
               />
               <button
                 type="button"
@@ -177,8 +214,8 @@ export default function LoginPage() {
           </div>
 
           {/* Action Trigger Button */}
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={isLoading}
             className="h-11 w-full rounded-xl bg-gradient-to-r from-teal-500 to-blue-500 font-bold text-slate-950 shadow-[0_4px_20px_rgba(20,184,166,0.15)] transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-50 flex items-center justify-center text-sm tracking-wide mt-6"
           >
@@ -209,6 +246,42 @@ export default function LoginPage() {
           </div>
 
         </form>
+        {/* DEMO BUTTONS SECTION */}
+        <div className="mt-8 border-t border-slate-700/50 pt-6">
+          <p className="text-sm text-center text-slate-400 mb-1">
+            <Sparkles className="inline h-3.5 w-3.5 text-teal-400 mb-0.5 mr-1" />
+            Try MedVault instantly — no signup required
+          </p>
+          <p className="text-[11px] text-center text-slate-600 mb-4">
+            Demo doctor account is pre-approved, skipping the usual hospital-admin verification wait.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => handleDemoLogin('patient')}
+              type="button"
+              disabled={demoLoadingRole !== null}
+              className="px-4 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded hover:bg-blue-500/30 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {demoLoadingRole === 'patient' ? 'Signing in…' : 'Demo Patient'}
+            </button>
+            <button
+              onClick={() => handleDemoLogin('doctor')}
+              type="button"
+              disabled={demoLoadingRole !== null}
+              className="px-4 py-2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded hover:bg-emerald-500/30 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {demoLoadingRole === 'doctor' ? 'Signing in…' : 'Demo Doctor'}
+            </button>
+            <button
+              onClick={() => handleDemoLogin('admin')}
+              type="button"
+              disabled={demoLoadingRole !== null}
+              className="px-4 py-2 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded hover:bg-purple-500/30 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {demoLoadingRole === 'admin' ? 'Signing in…' : 'Demo Hospital Admin'}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* DECENTRALIZED SECURITY FOOT NOTE */}

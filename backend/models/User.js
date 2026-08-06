@@ -68,10 +68,17 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: false
   },
-  verificationStatus: { 
-    type: String, 
-    enum: ['pending', 'verified', 'rejected'], 
+  verificationStatus: {
+    type: String,
+    enum: ['pending', 'verified', 'rejected'],
     default: 'verified' // Patients/Admins are verified by default
+  },
+  // 🎭 Marks seeded sandbox accounts (Demo Hospital / Demo Doctor / Demo Patient).
+  // Used by authController to auto-reset demo data on every login and can be used
+  // anywhere else to distinguish sandbox data from real production accounts.
+  isDemo: {
+    type: Boolean,
+    default: false
   },
 }, { timestamps: true });
 
