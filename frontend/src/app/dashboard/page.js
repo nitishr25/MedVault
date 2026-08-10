@@ -49,7 +49,9 @@ const HOSPITAL_DIRECTORY = {
   "HOSPITAL-04": "Sunrise Care Hospital",
   "HOSPITAL-05": "Oceanview Medical",
   "HOSPITAL-06": "Pinnacle Health System",
-  "HOSPITAL-07": "Central Neurological Institute"
+  "HOSPITAL-07": "Central Neurological Institute",
+  // Fixed tenant ID every demo account is seeded under — see backend/seed.js
+  "111111111111111111111111": "Demo Hospital"
 };
 
 export default function PremiumDashboard() {
@@ -62,6 +64,7 @@ export default function PremiumDashboard() {
   const [dbRecords, setDbRecords] = useState([]);
   const [activeStaff, setActiveStaff] = useState([]);
   const [currentUser, setCurrentUser] = useState({ username: 'Operator', role: 'patient', email: '' });
+  const isDemoUser = currentUser?.isDemo || currentUser?.username?.toLowerCase().includes('demo');
 
   const [directoryDoctors, setDirectoryDoctors] = useState([]);
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
@@ -879,7 +882,7 @@ export default function PremiumDashboard() {
     <div className="relative min-h-screen bg-slate-950 text-slate-100 flex overflow-hidden font-sans selection:bg-teal-500 selection:text-slate-950">
       {/* FLOATING GLASSMORPHIC TOAST NOTIFICATION LAYER */}
       {toast.show && (
-        <div className="fixed top-6 right-6 z-50 animate-in fade-in slide-in-from-top-6 duration-300">
+        <div className="fixed top-6 right-6 z-[10000] animate-in fade-in slide-in-from-top-6 duration-300">
           <div className={`flex items-center gap-3 px-6 py-4 rounded-xl border backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] min-w-[340px] max-w-md transition-all ${toast.type === 'success'
             ? 'bg-emerald-950/80 border-emerald-500/30 text-emerald-300 shadow-emerald-950/20'
             : 'bg-red-950/80 border-red-500/30 text-red-300 shadow-red-950/20'
@@ -2226,19 +2229,26 @@ export default function PremiumDashboard() {
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/20 border border-slate-900 p-4 rounded-xl hover:bg-slate-900/40 transition-colors">
                         <div className="space-y-1">
                           <span className="text-slate-500 block font-bold tracking-wider text-[9px] uppercase">Account Security</span>
-                          <span className="text-slate-400 text-xs block">Update your cryptographic access keys.</span>
+                          <span className="text-slate-400 text-xs block">
+                            {isDemoUser
+                              ? 'Disabled in demo mode — this credential is shared by every visitor.'
+                              : 'Update your cryptographic access keys.'}
+                          </span>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            console.log("🔒 BUTTON CLICK DETECTED!");
-                            setPasswordModal({ isOpen: true, currentPassword: '', newPassword: '', isLoading: false });
-                          }}
-                          className="h-9 px-4 rounded-lg bg-teal-500/10 border border-teal-500/20 text-[11px] font-bold text-teal-400 hover:bg-teal-500 hover:text-slate-950 transition-all flex items-center gap-1.5 whitespace-nowrap"
-                        >
-                          <KeyRound className="h-3.5 w-3.5" /> Update Password
-                        </button>
+                        {isDemoUser ? (
+                          <span className="h-9 px-4 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-bold text-slate-600 flex items-center gap-1.5 whitespace-nowrap cursor-not-allowed">
+                            <KeyRound className="h-3.5 w-3.5" /> Update Password
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setPasswordModal({ isOpen: true, currentPassword: '', newPassword: '', isLoading: false })}
+                            className="h-9 px-4 rounded-lg bg-teal-500/10 border border-teal-500/20 text-[11px] font-bold text-teal-400 hover:bg-teal-500 hover:text-slate-950 transition-all flex items-center gap-1.5 whitespace-nowrap"
+                          >
+                            <KeyRound className="h-3.5 w-3.5" /> Update Password
+                          </button>
+                        )}
                       </div>
 
                       {/* DEPLOYMENT TERMINATION ROW */}

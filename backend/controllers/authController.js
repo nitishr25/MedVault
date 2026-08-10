@@ -137,14 +137,17 @@ const loginUser = async (req, res) => {
     if (user.isDemo) {
       console.log(`🚨 INITIALIZING FRESH DEMO SANDBOX FOR: ${user.username}`);
       const DEMO_HOSPITAL_ID = '111111111111111111111111';
-      
+
       try {
-        // Add any other models here (e.g., Connection, Appointment) that need wiping
-        await Record.deleteMany({ hospitalId: DEMO_HOSPITAL_ID });
+        // Record has no hospitalId field — it's scoped by `user` (the owner), so
+        // deleteMany({ hospitalId }) below silently matched zero documents on every
+        // login. Resolve the demo tenant's user IDs first and wipe by ownership instead.
+        const demoUserIds = await User.find({ hospitalId: DEMO_HOSPITAL_ID }).distinct('_id');
+        await Record.deleteMany({ user: { $in: demoUserIds } });
         await Activity.deleteMany({ hospitalId: DEMO_HOSPITAL_ID });
         console.log("🧹 Demo Sandbox Wiped Clean.");
       } catch (wipeErr) {
-        console.error("⚠️ Warning: Sandbox wipe failed. Ensure models have hospitalId schema.", wipeErr.message);
+        console.error("⚠️ Warning: Sandbox wipe failed.", wipeErr.message);
       }
     }
     // =========================================================================
@@ -176,11 +179,12 @@ const loginUser = async (req, res) => {
         username: user.username,
         email: user.email,
         role: user.role,
-        specialty: user.specialty, 
-        verificationStatus: user.verificationStatus, 
-        hospitalId: user.hospitalId, 
+        specialty: user.specialty,
+        verificationStatus: user.verificationStatus,
+        hospitalId: user.hospitalId,
         publicKey: user.publicKey,
-        privateKey: user.privateKey 
+        privateKey: user.privateKey,
+        isDemo: user.isDemo
       }
     });
 
@@ -206,6 +210,12 @@ const updatePassword = async (req, res) => {
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ status: 'fail', message: 'User identity node not found.' });
+    }
+
+    // Demo accounts share one password across every visitor — block changes here too,
+    // not just in the UI, since this credential is shared by every visitor.
+    if (user.isDemo) {
+      return res.status(403).json({ status: 'fail', message: 'Password changes are disabled for demo accounts.' });
     }
 
     // 2. Validate current password

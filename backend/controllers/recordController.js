@@ -92,6 +92,7 @@ const uploadRecord = async (req, res, next) => {
         patient: req.user.username || 'Patient',
         record: title.trim(),
         action: 'Uploaded Document',
+        hospitalId: req.user.hospitalId,
         color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
         timestamp: new Date()
       });
