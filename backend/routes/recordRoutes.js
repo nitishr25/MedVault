@@ -4,7 +4,8 @@ import multer from 'multer';
 // Modern ES Module imports for your local controller and middleware modules
 // CRITICAL: Always append the explicit '.js' extension when importing local files in ESM!
 import recordController from '../controllers/recordController.js';
-import { protect } from '../middleware/auth.js'; 
+// 1. IMPORT YOUR NEW MIDDLEWARE HERE 👇
+import { protect} from '../middleware/auth.js'; 
 
 const router = express.Router();
 
@@ -40,7 +41,7 @@ const upload = multer({
 // 🛡️ SECURE NETWORK BOUNDARIES
 // =========================================================================
 
-// Endpoint 1: Live Database Telemetry Metrics
+// Endpoint 1: Live Database Telemetry Metrics (GET - Left alone)
 router.get('/stats/telemetry', protect, (req, res, next) => {
   if (recordController && typeof recordController.getRecordStats === 'function') {
     return recordController.getRecordStats(req, res, next);
@@ -48,7 +49,7 @@ router.get('/stats/telemetry', protect, (req, res, next) => {
   return res.status(500).json({ error: "getRecordStats handler function is not defined on recordController" });
 });
 
-// Endpoint 2: Stream authenticated user list arrays back down to the interface
+// Endpoint 2: Stream authenticated user list arrays (GET - Left alone)
 router.get('/user', protect, (req, res, next) => {
   if (recordController && typeof recordController.getUserRecords === 'function') {
     return recordController.getUserRecords(req, res, next);
@@ -56,7 +57,8 @@ router.get('/user', protect, (req, res, next) => {
   return res.status(500).json({ error: "getUserRecords handler function is not defined on recordController" });
 });
 
-// Endpoint 3: Upload and pin fresh digital health documentation matrix streams to IPFS
+// Endpoint 3: Upload and pin fresh digital health documentation (POST - Guarded)
+// 2. ADD blockDemoAccounts AFTER protect 👇
 router.post('/upload', protect, upload.single('file'), (req, res, next) => {
   if (recordController && typeof recordController.uploadRecord === 'function') {
     return recordController.uploadRecord(req, res, next);
@@ -64,27 +66,30 @@ router.post('/upload', protect, upload.single('file'), (req, res, next) => {
   return res.status(500).json({ error: "uploadRecord handler function is not defined on recordController" });
 });
 
-// Endpoint 4: Decentralized Relayer Network Anchor Sync Gate
-// Protected so only authenticated users can trigger decentralized logging loops
+// Endpoint 4: Decentralized Relayer Network Anchor Sync Gate (POST - Guarded)
 router.post('/blockchain-sync', protect, (req, res, next) => {
   if (typeof syncRecordToBlockchain === 'function') {
     return syncRecordToBlockchain(req, res, next);
   }
-  return res.status(500).json({ error: "syncRecordToBlockchain handler function is not defined or exported correctly on recordController" });
+  return res.status(500).json({ error: "syncRecordToBlockchain handler function is not defined or exported correctly" });
 });
 
-// Get a specific doctor's public key by their email
+// Get a specific doctor's public key by their email (GET - Left alone)
 router.get('/public-key/:email', protect, recordController.getTargetPublicKey);
+
+// Add doctor feedback (PUT - Guarded)
 router.put('/:id/feedback', protect, addDoctorFeedback);
+
+// Get user activities (GET - Left alone)
 router.get('/activities', protect, getUserActivities);
 
-  // Grant access to a specific record
+// Grant access to a specific record (POST - Guarded)
 router.post('/share', protect, recordController.grantRecordAccess);
 
+// Add record remark (POST - Guarded)
 router.post('/add-remark', protect, recordController.addRecordRemark);
 
-// Endpoint 5: Query singular transaction data allocations via unique ID string matching
-// (Placed last to prevent greedy parameter match collisions with explicit static paths)
+// Endpoint 5: Query singular transaction data allocations (GET - Left alone)
 router.get('/:id', protect, (req, res, next) => {
   if (recordController && typeof recordController.getRecord === 'function') {
     return recordController.getRecord(req, res, next);

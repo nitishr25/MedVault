@@ -9,8 +9,7 @@ const router = express.Router();
 router.use(protect);
 
 // 2. RBAC GATE: Only Super Admins and Hospital Admins can access these routes
-router.use(restrictTo('super_admin', 'hospital_admin'));
-
+router.use(restrictTo('super_admin', 'hospital_admin', 'admin'));
 // 3. THE ROUTES
 // Note: Your controller already handles the logic to show global vs local telemetry
 router.get('/telemetry', getAdminTelemetry); 

@@ -1,4 +1,5 @@
 'use client';
+import DemoBanner from '@/components/DemoBanner';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '../../lib/api';
@@ -48,7 +49,9 @@ const HOSPITAL_DIRECTORY = {
   "HOSPITAL-04": "Sunrise Care Hospital",
   "HOSPITAL-05": "Oceanview Medical",
   "HOSPITAL-06": "Pinnacle Health System",
-  "HOSPITAL-07": "Central Neurological Institute"
+  "HOSPITAL-07": "Central Neurological Institute",
+  // Fixed tenant ID every demo account is seeded under — see backend/seed.js
+  "111111111111111111111111": "Demo Hospital"
 };
 
 export default function PremiumDashboard() {
@@ -61,6 +64,7 @@ export default function PremiumDashboard() {
   const [dbRecords, setDbRecords] = useState([]);
   const [activeStaff, setActiveStaff] = useState([]);
   const [currentUser, setCurrentUser] = useState({ username: 'Operator', role: 'patient', email: '' });
+  const isDemoUser = currentUser?.isDemo || currentUser?.username?.toLowerCase().includes('demo');
 
   const [directoryDoctors, setDirectoryDoctors] = useState([]);
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
@@ -726,12 +730,13 @@ export default function PremiumDashboard() {
 
       console.log("🟢 STEP 1: Fetching Doctor's Key...");
       const docEmailClean = shareData.doctorEmail.toLowerCase().trim();
-      const keyResponse = await fetch(`http://localhost:5000/api/v1/records/public-key/${docEmailClean}`, {
-        headers: { 'Authorization': `Bearer ${authToken}` }
-      });
-
-      if (!keyResponse.ok) throw new Error('Target doctor node not found.');
-      const keyResult = await keyResponse.json();
+      let keyResult;
+      try {
+        const keyRes = await api.get(`/records/public-key/${docEmailClean}`);
+        keyResult = keyRes.data;
+      } catch (err) {
+        throw new Error(err.response?.data?.message || 'Target doctor node not found.');
+      }
       const { doctorId, publicKey: pemString } = keyResult.data;
 
       console.log("🟢 STEP 2: Converting RSA Key...");
@@ -792,13 +797,15 @@ export default function PremiumDashboard() {
       const sharedWrappedKeyArray = Array.from(new Uint8Array(doctorWrappedKeyBuffer));
 
       console.log("🟢 STEP 5: Saving to Database...");
-      const shareResponse = await fetch('http://localhost:5000/api/v1/records/share', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-        body: JSON.stringify({ recordId: shareData.record._id, doctorId, sharedWrappedKey: sharedWrappedKeyArray })
-      });
-
-      if (!shareResponse.ok) throw new Error('Failed to dispatch re-wrapped key.');
+      try {
+        await api.post('/records/share', {
+          recordId: shareData.record._id,
+          doctorId,
+          sharedWrappedKey: sharedWrappedKeyArray
+        });
+      } catch (err) {
+        throw new Error(err.response?.data?.message || 'Failed to dispatch re-wrapped key.');
+      }
 
       triggerToast(`Access granted cleanly! Encrypted key envelope stored for ${docEmailClean}.`, "success");
       closeShareModal();
@@ -873,10 +880,9 @@ export default function PremiumDashboard() {
 
   return (
     <div className="relative min-h-screen bg-slate-950 text-slate-100 flex overflow-hidden font-sans selection:bg-teal-500 selection:text-slate-950">
-
       {/* FLOATING GLASSMORPHIC TOAST NOTIFICATION LAYER */}
       {toast.show && (
-        <div className="fixed top-6 right-6 z-50 animate-in fade-in slide-in-from-top-6 duration-300">
+        <div className="fixed top-6 right-6 z-[10000] animate-in fade-in slide-in-from-top-6 duration-300">
           <div className={`flex items-center gap-3 px-6 py-4 rounded-xl border backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] min-w-[340px] max-w-md transition-all ${toast.type === 'success'
             ? 'bg-emerald-950/80 border-emerald-500/30 text-emerald-300 shadow-emerald-950/20'
             : 'bg-red-950/80 border-red-500/30 text-red-300 shadow-red-950/20'
@@ -1035,24 +1041,26 @@ export default function PremiumDashboard() {
       <div className="flex-1 flex flex-col relative z-10 overflow-y-auto">
 
         {/* INTERACTIVE WORKSPACE SUBHEADER */}
-        <header className="h-20 border-b border-slate-900/60 px-8 flex items-center justify-between bg-slate-950/20 backdrop-blur-xl shrink-0">
-          <div>
-            <h2 className="text-sm font-bold tracking-wide text-white">MedVault Management Dashboard</h2>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">Secure, decentralized cross-origin framework nodes reporting stable.</p>
+        <header className="min-h-20 border-b border-slate-900/60 px-4 sm:px-8 py-3 flex flex-wrap items-center justify-between gap-3 bg-slate-950/20 backdrop-blur-xl shrink-0">
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold tracking-wide text-white truncate">MedVault Management Dashboard</h2>
+            <p className="text-xs text-slate-500 font-medium mt-0.5 truncate hidden lg:block">Secure, decentralized cross-origin framework nodes reporting stable.</p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            <DemoBanner user={currentUser} />
             <button
               type="button"
               onClick={fetchLiveRecords}
               disabled={isLoading}
-              className="p-2 border border-slate-900 rounded-xl bg-slate-900/40 text-slate-400 hover:text-white hover:bg-slate-900 transition-all disabled:opacity-40"
+              className="p-2 border border-slate-900 rounded-xl bg-slate-900/40 text-slate-400 hover:text-white hover:bg-slate-900 transition-all disabled:opacity-40 shrink-0"
               title="Force Sync Index Ledger"
             >
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
-            <div className="flex items-center gap-2 bg-emerald-500/5 border border-emerald-500/10 rounded-xl px-4 py-1.5 text-[11px] font-bold tracking-wide text-emerald-400 shadow-sm shadow-emerald-950/10">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              IPFS Gateway Connected
+            <div className="flex items-center gap-2 bg-emerald-500/5 border border-emerald-500/10 rounded-xl px-4 py-1.5 text-[11px] font-bold tracking-wide text-emerald-400 shadow-sm shadow-emerald-950/10 whitespace-nowrap shrink-0">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+              <span className="hidden sm:inline">IPFS Gateway Connected</span>
+              <span className="sm:hidden">IPFS</span>
             </div>
           </div>
         </header>
@@ -2221,19 +2229,26 @@ export default function PremiumDashboard() {
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/20 border border-slate-900 p-4 rounded-xl hover:bg-slate-900/40 transition-colors">
                         <div className="space-y-1">
                           <span className="text-slate-500 block font-bold tracking-wider text-[9px] uppercase">Account Security</span>
-                          <span className="text-slate-400 text-xs block">Update your cryptographic access keys.</span>
+                          <span className="text-slate-400 text-xs block">
+                            {isDemoUser
+                              ? 'Disabled in demo mode — this credential is shared by every visitor.'
+                              : 'Update your cryptographic access keys.'}
+                          </span>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            console.log("🔒 BUTTON CLICK DETECTED!");
-                            setPasswordModal({ isOpen: true, currentPassword: '', newPassword: '', isLoading: false });
-                          }}
-                          className="h-9 px-4 rounded-lg bg-teal-500/10 border border-teal-500/20 text-[11px] font-bold text-teal-400 hover:bg-teal-500 hover:text-slate-950 transition-all flex items-center gap-1.5 whitespace-nowrap"
-                        >
-                          <KeyRound className="h-3.5 w-3.5" /> Update Password
-                        </button>
+                        {isDemoUser ? (
+                          <span className="h-9 px-4 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-bold text-slate-600 flex items-center gap-1.5 whitespace-nowrap cursor-not-allowed">
+                            <KeyRound className="h-3.5 w-3.5" /> Update Password
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setPasswordModal({ isOpen: true, currentPassword: '', newPassword: '', isLoading: false })}
+                            className="h-9 px-4 rounded-lg bg-teal-500/10 border border-teal-500/20 text-[11px] font-bold text-teal-400 hover:bg-teal-500 hover:text-slate-950 transition-all flex items-center gap-1.5 whitespace-nowrap"
+                          >
+                            <KeyRound className="h-3.5 w-3.5" /> Update Password
+                          </button>
+                        )}
                       </div>
 
                       {/* DEPLOYMENT TERMINATION ROW */}

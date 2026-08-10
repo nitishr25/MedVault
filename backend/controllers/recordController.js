@@ -92,6 +92,7 @@ const uploadRecord = async (req, res, next) => {
         patient: req.user.username || 'Patient',
         record: title.trim(),
         action: 'Uploaded Document',
+        hospitalId: req.user.hospitalId,
         color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
         timestamp: new Date()
       });
@@ -113,6 +114,21 @@ const syncRecordToBlockchain = async (req, res, next) => {
   try {
     const { ipfsHash, title } = req.body;
     if (!ipfsHash || !title) return res.status(400).json({ status: 'error', message: 'Missing IPFS payload.' });
+
+    // Demo-mode / missing-config guard — skip blockchain safely
+    if (process.env.DEMO_MODE === 'true' || !process.env.BLOCKCHAIN_RPC_URL) {
+      return res.status(200).json({
+        status: 'success',
+        demo: true,
+        message: 'Blockchain sync simulated (demo mode).',
+        blockchainData: {
+          transactionHash: '0xDEMO000000000000000000000000000000000000000000000000000000',
+          blockNumber: 0,
+          gasUsed: '0',
+          contractDestination: process.env.SMART_CONTRACT_ADDRESS || 'N/A',
+        },
+      });
+    }
 
     const provider = new JsonRpcProvider(process.env.BLOCKCHAIN_RPC_URL);
     const cleanKey = sanitizePrivateKey(process.env.RELAYER_PRIVATE_KEY);

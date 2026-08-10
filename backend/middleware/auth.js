@@ -47,5 +47,6 @@ const restrictTo = (...allowedRoles) => {
   };
 };
 
-// Modern ES Module named export standard structure
-export { protect, restrictTo };
+
+
+export { protect, restrictTo }; 

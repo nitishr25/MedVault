@@ -13,6 +13,10 @@ import {
   Sparkles,
   Eye,
   EyeOff,
+  User,
+  Stethoscope,
+  Building2,
+  Loader2,
 } from 'lucide-react';
 
 export default function LoginPage() {
@@ -87,6 +91,33 @@ export default function LoginPage() {
     admin: { email: 'admin@demo.com', password: 'MedVaultDemo@2026' }
   };
 
+  const demoRoles = [
+    {
+      key: 'patient',
+      label: 'Patient',
+      icon: User,
+      color: 'text-blue-300',
+      ring: 'border-blue-500/25 hover:border-blue-500/50',
+      glow: 'bg-blue-500/10 hover:bg-blue-500/15',
+    },
+    {
+      key: 'doctor',
+      label: 'Doctor',
+      icon: Stethoscope,
+      color: 'text-emerald-300',
+      ring: 'border-emerald-500/25 hover:border-emerald-500/50',
+      glow: 'bg-emerald-500/10 hover:bg-emerald-500/15',
+    },
+    {
+      key: 'admin',
+      label: 'Hospital Admin',
+      icon: Building2,
+      color: 'text-purple-300',
+      ring: 'border-purple-500/25 hover:border-purple-500/50',
+      glow: 'bg-purple-500/10 hover:bg-purple-500/15',
+    },
+  ];
+
   const handleDemoLogin = async (role) => {
     setDemoLoadingRole(role);
     try {
@@ -116,12 +147,12 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center overflow-hidden p-4 font-sans selection:bg-teal-500 selection:text-slate-950">
+    <div className="relative min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center overflow-x-hidden overflow-y-auto p-4 sm:p-6 font-sans selection:bg-teal-500 selection:text-slate-950">
 
       {/* FLOATING GLASSMORPHIC TOAST PANEL */}
       {toast.show && (
-        <div className="fixed top-6 right-6 z-50 animate-in fade-in slide-in-from-top-6 duration-300">
-          <div className={`flex items-center gap-3 px-6 py-4 rounded-xl border backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] w-full max-w-md transition-all ${toast.type === 'success'
+        <div className="fixed top-4 left-4 right-4 sm:left-auto sm:top-6 sm:right-6 z-50 animate-in fade-in slide-in-from-top-6 duration-300 sm:w-full sm:max-w-md">
+          <div className={`flex items-center gap-3 px-4 sm:px-6 py-4 rounded-xl border backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] w-full transition-all ${toast.type === 'success'
               ? 'bg-emerald-950/80 border-emerald-500/30 text-emerald-300 shadow-emerald-950/20'
               : 'bg-red-950/80 border-red-500/30 text-red-300 shadow-red-950/20'
             }`}>
@@ -150,7 +181,7 @@ export default function LoginPage() {
       </div>
 
       {/* CENTRAL IDENTITY CONTROL INTERFACE CARD */}
-      <div className="relative z-10 w-full max-w-md bg-slate-900/30 backdrop-blur-2xl border border-slate-900 rounded-2xl p-8 shadow-[0_30px_100px_rgba(0,0,0,0.8)] space-y-6 group">
+      <div className="relative z-10 w-full max-w-md bg-slate-900/30 backdrop-blur-2xl border border-slate-900 rounded-2xl p-5 sm:p-8 shadow-[0_30px_100px_rgba(0,0,0,0.8)] space-y-6 group my-10">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-800 to-transparent group-hover:via-teal-500/30 transition-all duration-700" />
 
         {/* Core Header Branding */}
@@ -158,7 +189,7 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center rounded-xl bg-gradient-to-br from-teal-500/10 to-blue-500/10 p-3 ring-1 ring-teal-500/20 shadow-inner group-hover:scale-105 transition-transform duration-500">
             <Fingerprint className="h-6 w-6 text-teal-400" />
           </div>
-          <h2 className="text-2xl font-extrabold tracking-tight text-white bg-clip-text bg-gradient-to-b from-white to-slate-300精密">
+          <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white bg-clip-text bg-gradient-to-b from-white to-slate-300 px-2">
             Access MedVault Secure Node
           </h2>
           <p className="text-xs text-slate-500 font-medium tracking-wide max-w-[290px] mx-auto">
@@ -247,47 +278,44 @@ export default function LoginPage() {
 
         </form>
         {/* DEMO BUTTONS SECTION */}
-        <div className="mt-8 border-t border-slate-700/50 pt-6">
-          <p className="text-sm text-center text-slate-400 mb-1">
-            <Sparkles className="inline h-3.5 w-3.5 text-teal-400 mb-0.5 mr-1" />
-            Try MedVault instantly — no signup required
+        <div className="mt-8 border-t border-slate-800 pt-6">
+          <p className="text-sm text-center text-slate-300 font-medium mb-1 flex items-center justify-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5 text-teal-400" />
+            Try MedVault Demo Mode
           </p>
-          <p className="text-[11px] text-center text-slate-600 mb-4">
-            Demo doctor account is pre-approved, skipping the usual hospital-admin verification wait.
+          <p className="text-[11px] text-center text-slate-600 mb-4 max-w-[280px] mx-auto leading-relaxed">
+            No signup required — the demo doctor account is pre-approved, skipping the usual verification wait.
           </p>
-          <div className="flex gap-3 justify-center">
-            <button
-              onClick={() => handleDemoLogin('patient')}
-              type="button"
-              disabled={demoLoadingRole !== null}
-              className="px-4 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded hover:bg-blue-500/30 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {demoLoadingRole === 'patient' ? 'Signing in…' : 'Demo Patient'}
-            </button>
-            <button
-              onClick={() => handleDemoLogin('doctor')}
-              type="button"
-              disabled={demoLoadingRole !== null}
-              className="px-4 py-2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded hover:bg-emerald-500/30 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {demoLoadingRole === 'doctor' ? 'Signing in…' : 'Demo Doctor'}
-            </button>
-            <button
-              onClick={() => handleDemoLogin('admin')}
-              type="button"
-              disabled={demoLoadingRole !== null}
-              className="px-4 py-2 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded hover:bg-purple-500/30 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {demoLoadingRole === 'admin' ? 'Signing in…' : 'Demo Hospital Admin'}
-            </button>
+          <div className="grid grid-cols-3 gap-2.5">
+            {demoRoles.map(({ key, label, icon: Icon, color, ring, glow }) => {
+              const isLoading = demoLoadingRole === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => handleDemoLogin(key)}
+                  type="button"
+                  disabled={demoLoadingRole !== null}
+                  className={`flex h-[72px] flex-col items-center justify-center gap-1.5 rounded-xl border ${ring} ${glow} px-1.5 text-center transition-all active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100`}
+                >
+                  {isLoading ? (
+                    <Loader2 className={`h-4 w-4 animate-spin ${color}`} />
+                  ) : (
+                    <Icon className={`h-4 w-4 ${color}`} />
+                  )}
+                  <span className={`text-[11px] font-semibold leading-tight ${color}`}>
+                    {isLoading ? 'Signing in…' : label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
 
       {/* DECENTRALIZED SECURITY FOOT NOTE */}
-      <div className="absolute bottom-4 inset-x-0 text-center pointer-events-none">
-        <p className="text-[10px] text-slate-700 font-mono tracking-widest uppercase flex items-center justify-center gap-1.5">
-          <Shield className="h-3 w-3 text-slate-800" /> End-to-End Encrypted Quantum Ledger Node Auth Active
+      <div className="absolute bottom-2 sm:bottom-4 inset-x-0 text-center pointer-events-none px-4">
+        <p className="text-[9px] sm:text-[10px] text-slate-700 font-mono tracking-widest uppercase flex items-center justify-center gap-1.5 flex-wrap">
+          <Shield className="h-3 w-3 text-slate-800 shrink-0" /> End-to-End Encrypted Quantum Ledger Node Auth Active
         </p>
       </div>
     </div>
