@@ -38,7 +38,9 @@ import {
   Eye,
   EyeOff,
   Building2,
-  Stethoscope
+  Stethoscope,
+  Menu,
+  X
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -65,6 +67,7 @@ export default function PremiumDashboard() {
   const [activeStaff, setActiveStaff] = useState([]);
   const [currentUser, setCurrentUser] = useState({ username: 'Operator', role: 'patient', email: '' });
   const isDemoUser = currentUser?.isDemo || currentUser?.username?.toLowerCase().includes('demo');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [directoryDoctors, setDirectoryDoctors] = useState([]);
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
@@ -910,22 +913,41 @@ export default function PremiumDashboard() {
         />
       </div>
 
+      {/* MOBILE SIDEBAR BACKDROP */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-slate-950/70 backdrop-blur-sm lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* STICKY GLASSMORPHIC SIDEBAR NAVIGATION MODULE */}
-      <aside className="relative z-10 w-64 border-r border-slate-900 bg-slate-900/20 backdrop-blur-2xl flex flex-col justify-between shrink-0">
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-slate-900 bg-slate-950 lg:bg-slate-900/20 backdrop-blur-2xl flex flex-col justify-between shrink-0 transform transition-transform duration-300 ease-in-out lg:static lg:z-10 lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+      >
         <div>
           <div className="h-20 px-6 flex items-center gap-3 border-b border-slate-900/60">
             <div className="inline-flex items-center justify-center rounded-xl bg-gradient-to-br from-teal-500/10 to-emerald-500/10 p-2.5 ring-1 ring-teal-500/20 shadow-inner">
               <Shield className="h-5 w-5 text-teal-400" />
             </div>
-            <div className="flex flex-col">
+            <div className="flex flex-col flex-1">
               <span className="text-base font-black tracking-wider text-white uppercase bg-clip-text bg-gradient-to-b from-white to-slate-400">MedVault</span>
               <span className="text-[9px] text-slate-500 font-mono tracking-widest uppercase">Decentralized</span>
             </div>
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(false)}
+              className="lg:hidden p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-900 transition-colors"
+              aria-label="Close menu"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
           <nav className="p-4 space-y-1.5">
             <button
-              onClick={() => setActiveTab('overview')}
+              onClick={() => { setActiveTab('overview'); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 h-11 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'overview'
                 ? 'bg-gradient-to-r from-teal-500/10 to-teal-500/5 text-teal-400 ring-1 ring-teal-500/20 shadow-lg shadow-teal-950/20'
                 : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'
@@ -938,7 +960,7 @@ export default function PremiumDashboard() {
             {/* STRICT ROLE GUARD: ONLY PATIENTS SEE MY NETWORK */}
             {currentUser?.role === 'patient' && (
               <button
-                onClick={() => setActiveTab('network')}
+                onClick={() => { setActiveTab('network'); setIsSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 h-11 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'network'
                   ? 'bg-gradient-to-r from-teal-500/10 to-teal-500/5 text-teal-400 ring-1 ring-teal-500/20 shadow-lg shadow-teal-950/20'
                   : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'
@@ -952,7 +974,7 @@ export default function PremiumDashboard() {
             {/* STRICT ROLE GUARD: ADMINS EXCLUDED FROM MEDICAL RECORDS */}
             {(currentUser?.role === 'doctor' || currentUser?.role === 'patient') && (
               <button
-                onClick={() => setActiveTab('records')}
+                onClick={() => { setActiveTab('records'); setIsSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 h-11 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'records'
                   ? 'bg-gradient-to-r from-teal-500/10 to-teal-500/5 text-teal-400 ring-1 ring-teal-500/20 shadow-lg shadow-teal-950/20'
                   : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'
@@ -966,7 +988,7 @@ export default function PremiumDashboard() {
             {/* STRICT ROLE GUARD: ADMINS ONLY AUDIT LOGS */}
             {(currentUser?.role === 'admin' || currentUser?.role === 'hospital_admin') && (
               <button
-                onClick={() => setActiveTab('audit-logs')}
+                onClick={() => { setActiveTab('audit-logs'); setIsSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 h-11 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'audit-logs'
                   ? 'bg-gradient-to-r from-teal-500/10 to-teal-500/5 text-teal-400 ring-1 ring-teal-500/20 shadow-lg shadow-teal-950/20'
                   : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'
@@ -980,7 +1002,7 @@ export default function PremiumDashboard() {
             {/* STRICT ROLE GUARD: ONLY PATIENTS CAN UPLOAD */}
             {currentUser?.role === 'patient' && (
               <button
-                onClick={() => setActiveTab('upload')}
+                onClick={() => { setActiveTab('upload'); setIsSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 h-11 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'upload'
                   ? 'bg-gradient-to-r from-teal-500/10 to-teal-500/5 text-teal-400 ring-1 ring-teal-500/20 shadow-lg shadow-teal-950/20'
                   : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'
@@ -992,7 +1014,7 @@ export default function PremiumDashboard() {
             )}
 
             <button
-              onClick={() => setActiveTab('settings')}
+              onClick={() => { setActiveTab('settings'); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 h-11 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'settings'
                 ? 'bg-gradient-to-r from-teal-500/10 to-teal-500/5 text-teal-400 ring-1 ring-teal-500/20 shadow-lg shadow-teal-950/20'
                 : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'
@@ -1042,9 +1064,19 @@ export default function PremiumDashboard() {
 
         {/* INTERACTIVE WORKSPACE SUBHEADER */}
         <header className="min-h-20 border-b border-slate-900/60 px-4 sm:px-8 py-3 flex flex-wrap items-center justify-between gap-3 bg-slate-950/20 backdrop-blur-xl shrink-0">
-          <div className="min-w-0">
-            <h2 className="text-sm font-bold tracking-wide text-white truncate">MedVault Management Dashboard</h2>
-            <p className="text-xs text-slate-500 font-medium mt-0.5 truncate hidden lg:block">Secure, decentralized cross-origin framework nodes reporting stable.</p>
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden p-2 -ml-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors shrink-0"
+              aria-label="Open menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div className="min-w-0">
+              <h2 className="text-sm font-bold tracking-wide text-white truncate">MedVault Management Dashboard</h2>
+              <p className="text-xs text-slate-500 font-medium mt-0.5 truncate hidden lg:block">Secure, decentralized cross-origin framework nodes reporting stable.</p>
+            </div>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <DemoBanner user={currentUser} />
