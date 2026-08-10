@@ -1,11 +1,21 @@
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import User from './models/User.js';
 import Connection from './models/Connection.js';
 
 const MONGO_URI = process.env.MONGODB_URI || process.env.MONGOOB_URI || 'mongodb://127.0.0.1:27017/medvault';
 const DEMO_PASSWORD = 'MedVaultDemo@2026';
+
+// Same RSA keypair shape authController.registerUser generates — demo accounts are
+// upserted directly (bypassing registration), so without this, getTargetPublicKey
+// 400s on every demo doctor/admin and record-sharing can never succeed.
+const generateKeyPair = () => crypto.generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+});
 
 const seedDemoAccounts = async () => {
   try {
@@ -39,7 +49,8 @@ const seedDemoAccounts = async () => {
         isDemo: true,
         password,
         verificationStatus: 'verified', // 👈 Pre-approved — skips hospital admin verification
-        hospitalId: demoHospitalId
+        hospitalId: demoHospitalId,
+        ...generateKeyPair(), // record-sharing looks doctors up by publicKey — see getTargetPublicKey
       },
       {
         username: 'Demo Hospital Admin',
@@ -51,7 +62,8 @@ const seedDemoAccounts = async () => {
         isDemo: true,
         password,
         verificationStatus: 'verified',
-        hospitalId: demoHospitalId
+        hospitalId: demoHospitalId,
+        ...generateKeyPair(),
       },
     ];
 

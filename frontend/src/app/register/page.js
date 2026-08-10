@@ -327,7 +327,7 @@ export default function RegisterPage() {
                 onClick={() => router.push('/login')}
                 className="text-teal-400 hover:text-teal-300 font-bold underline transition-colors underline-offset-2"
               >
-                Login IN
+                LogIN
               </button>
             </p>
           </div>

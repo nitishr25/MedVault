@@ -3,6 +3,10 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 
+// 🚨 NEW IMPORTS FOR DEMO WIPING (Ensure paths match your project!)
+import Record from '../models/Record.js';
+import Activity from '../models/Activity.js';
+
 /**
  * 📝 Production Registration Controller Engine (Multi-Tenant RBAC Ready)
  */
@@ -126,6 +130,24 @@ const loginUser = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({ status: 'fail', message: 'Authorization handshake failed. Invalid identity credentials or node key.' });
     }
+
+    // =========================================================================
+    // 🧪 THE SANDBOX WIPE: Reset the demo database if a demo user is logging in
+    // =========================================================================
+    if (user.isDemo) {
+      console.log(`🚨 INITIALIZING FRESH DEMO SANDBOX FOR: ${user.username}`);
+      const DEMO_HOSPITAL_ID = '111111111111111111111111';
+      
+      try {
+        // Add any other models here (e.g., Connection, Appointment) that need wiping
+        await Record.deleteMany({ hospitalId: DEMO_HOSPITAL_ID });
+        await Activity.deleteMany({ hospitalId: DEMO_HOSPITAL_ID });
+        console.log("🧹 Demo Sandbox Wiped Clean.");
+      } catch (wipeErr) {
+        console.error("⚠️ Warning: Sandbox wipe failed. Ensure models have hospitalId schema.", wipeErr.message);
+      }
+    }
+    // =========================================================================
 
     // 3. Generate JWT
     const token = jwt.sign(

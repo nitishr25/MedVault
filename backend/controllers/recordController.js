@@ -114,6 +114,21 @@ const syncRecordToBlockchain = async (req, res, next) => {
     const { ipfsHash, title } = req.body;
     if (!ipfsHash || !title) return res.status(400).json({ status: 'error', message: 'Missing IPFS payload.' });
 
+    // Demo-mode / missing-config guard — skip blockchain safely
+    if (process.env.DEMO_MODE === 'true' || !process.env.BLOCKCHAIN_RPC_URL) {
+      return res.status(200).json({
+        status: 'success',
+        demo: true,
+        message: 'Blockchain sync simulated (demo mode).',
+        blockchainData: {
+          transactionHash: '0xDEMO000000000000000000000000000000000000000000000000000000',
+          blockNumber: 0,
+          gasUsed: '0',
+          contractDestination: process.env.SMART_CONTRACT_ADDRESS || 'N/A',
+        },
+      });
+    }
+
     const provider = new JsonRpcProvider(process.env.BLOCKCHAIN_RPC_URL);
     const cleanKey = sanitizePrivateKey(process.env.RELAYER_PRIVATE_KEY);
     const relayerWallet = new Wallet(cleanKey, provider);

@@ -208,7 +208,18 @@ export const getAuditLogs = async (req, res) => {
   try {
     let query = {};
 
-    if (req.user.role === 'hospital_admin') {
+    // Filter logs for EVERYONE except the global super admin.
+    // This ensures 'hospital_admin', 'admin', and demo accounts only see their own data.
+    if (req.user.role !== 'super_admin') {
+      
+      // Safety check: Ensure the user actually has a hospitalId before querying
+      if (!req.user.hospitalId) {
+         return res.status(403).json({
+           status: 'fail',
+           message: 'Access Denied: User is not associated with a specific hospital.'
+         });
+      }
+
       query = { hospitalId: req.user.hospitalId };
     } 
 
