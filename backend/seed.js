@@ -39,7 +39,8 @@ const seedDemoAccounts = async () => {
         isDemo: true,
         password,
         verificationStatus: 'verified',
-        hospitalId: demoHospitalId
+        hospitalId: demoHospitalId,
+        ...generateKeyPair(), // every uploader wraps their own records under their own key now — see lib/encryption.js
       },
       {
         username: 'Dr. Demo Doctor',

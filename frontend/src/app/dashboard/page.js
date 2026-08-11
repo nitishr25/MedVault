@@ -3,7 +3,7 @@ import DemoBanner from '@/components/DemoBanner';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '../../lib/api';
-import { encryptFile, decryptFile } from '@/lib/encryption';
+import { encryptFile, decryptFile, unwrapToRawKey, rewrapKeyForRecipient } from '@/lib/encryption';
 import {
   Shield,
   ShieldCheck,
@@ -584,14 +584,13 @@ export default function PremiumDashboard() {
     try {
       const authToken = localStorage.getItem('token');
       if (!authToken) throw new Error('Not authenticated');
-
-      const encryptionSecret = "MedVault-Stable-Secret-2026";
+      if (!currentUser?.publicKey) throw new Error('Missing your account\'s encryption key — try logging in again.');
 
       const file = fileInput.files[0];
       const title = titleInput.value.trim();
       const description = descInput.value.trim();
 
-      const { encryptedBlob, iv, wrappedKey, originalType } = await encryptFile(file, encryptionSecret);
+      const { encryptedBlob, iv, wrappedKey, originalType } = await encryptFile(file, currentUser.publicKey);
 
       const payload = new FormData();
       payload.append('file', encryptedBlob, file.name);
@@ -669,7 +668,26 @@ export default function PremiumDashboard() {
     });
 
     try {
-      const encryptionSecret = "MedVault-Stable-Secret-2026";
+      if (!currentUser?.privateKey) throw new Error('Missing your account\'s decryption key — try logging in again.');
+
+      // Every wrappedKey is RSA-wrapped under a specific person's public key.
+      // The owner's own copy lives on record.wrappedKey; anyone else who can
+      // see this record got there via a sharedAccess grant wrapped under
+      // *their* public key specifically — using the wrong one here would
+      // just fail to decrypt, not silently return someone else's data.
+      const viewerId = String(currentUser?._id || currentUser?.id || '');
+      const ownerId = String(record.user?._id || record.user?.id || record.user || '');
+      const isOwner = viewerId && viewerId === ownerId;
+
+      let recordWrappedKey = record.wrappedKey;
+      if (!isOwner) {
+        const myAccessEntry = record.sharedAccess?.find(a => {
+          const recId = String(a.recipient?._id || a.recipient?.id || a.recipient || '');
+          return recId === viewerId;
+        });
+        if (!myAccessEntry) throw new Error('You do not have a decryption grant for this record.');
+        recordWrappedKey = myAccessEntry.wrappedKey;
+      }
 
       const targetUrl = record.ipfsGatewayUrl || `https://gateway.pinata.cloud/ipfs/${record.ipfsHash}`;
       const response = await fetch(targetUrl);
@@ -683,8 +701,8 @@ export default function PremiumDashboard() {
       decryptedBuffer = await decryptFile(
         encryptedArrayBuffer,
         record.iv,
-        record.wrappedKey,
-        encryptionSecret
+        recordWrappedKey,
+        currentUser.privateKey
       );
 
       const mimeType = record.originalMimeType || 'application/pdf';
@@ -728,8 +746,7 @@ export default function PremiumDashboard() {
     try {
       const authToken = localStorage.getItem('token');
       if (!authToken) throw new Error('Authentication token missing from client session node.');
-
-      const encryptionSecret = "MedVault-Stable-Secret-2026";
+      if (!currentUser?.privateKey) throw new Error('Missing your account\'s decryption key — try logging in again.');
 
       console.log("🟢 STEP 1: Fetching Doctor's Key...");
       const docEmailClean = shareData.doctorEmail.toLowerCase().trim();
@@ -742,64 +759,24 @@ export default function PremiumDashboard() {
       }
       const { doctorId, publicKey: pemString } = keyResult.data;
 
-      console.log("🟢 STEP 2: Converting RSA Key...");
-      let doctorPublicKeyCrypto;
-      try {
-        const pemContents = pemString.replace(/-----BEGIN PUBLIC KEY-----/, '').replace(/-----END PUBLIC KEY-----/, '').replace(/\s+/g, '');
-        const binaryDerString = window.atob(pemContents);
-        const binaryDer = new Uint8Array(binaryDerString.length);
-        for (let i = 0; i < binaryDerString.length; i++) {
-          binaryDer[i] = binaryDerString.charCodeAt(i);
-        }
-        doctorPublicKeyCrypto = await crypto.subtle.importKey('spki', binaryDer.buffer, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
-      } catch (err) {
-        throw new Error("Failed at Step 2: RSA Key conversion rejected.");
-      }
-
-      console.log("🟢 STEP 3: Unwrapping Patient's Key...");
+      console.log("🟢 STEP 2: Unwrapping Your Own Key...");
       let rawDekBytes;
       try {
-        const baseKeyBytes = new TextEncoder().encode(encryptionSecret);
-        const baseKey = await crypto.subtle.importKey('raw', baseKeyBytes, 'HKDF', false, ['deriveKey']);
-        const patientKek = await crypto.subtle.deriveKey(
-          { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(16), info: new Uint8Array() },
-          baseKey,
-          { name: 'AES-GCM', length: 256 },
-          true,
-          ['unwrapKey']
-        );
-
         const wrappedKeyRaw = shareData.record.wrappedKey.data || shareData.record.wrappedKey;
-
-        const fileDek = await crypto.subtle.unwrapKey(
-          'raw',
-          new Uint8Array(wrappedKeyRaw),
-          patientKek,
-          { name: 'AES-GCM', iv: new Uint8Array(12) },
-          { name: 'AES-GCM', length: 256 },
-          true,
-          ['encrypt', 'decrypt']
-        );
-        rawDekBytes = await crypto.subtle.exportKey('raw', fileDek);
+        rawDekBytes = await unwrapToRawKey(wrappedKeyRaw, currentUser.privateKey);
       } catch (err) {
-        throw new Error("Failed at Step 3: Could not unwrap the original key.");
+        throw new Error("Failed at Step 2: Could not unwrap the original key with your account's private key.");
       }
 
-      console.log("🟢 STEP 4: Re-encrypting for Doctor...");
-      let doctorWrappedKeyBuffer;
+      console.log("🟢 STEP 3: Re-encrypting for Doctor...");
+      let sharedWrappedKeyArray;
       try {
-        doctorWrappedKeyBuffer = await crypto.subtle.encrypt(
-          { name: 'RSA-OAEP' },
-          doctorPublicKeyCrypto,
-          rawDekBytes
-        );
+        sharedWrappedKeyArray = await rewrapKeyForRecipient(rawDekBytes, pemString);
       } catch (err) {
-        throw new Error("Failed at Step 4: Could not wrap key for doctor.");
+        throw new Error("Failed at Step 3: Could not wrap key for doctor.");
       }
 
-      const sharedWrappedKeyArray = Array.from(new Uint8Array(doctorWrappedKeyBuffer));
-
-      console.log("🟢 STEP 5: Saving to Database...");
+      console.log("🟢 STEP 4: Saving to Database...");
       try {
         await api.post('/records/share', {
           recordId: shareData.record._id,
