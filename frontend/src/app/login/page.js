@@ -39,19 +39,22 @@ export default function LoginPage() {
   };
 
   // 🐢 COLD-START RESILIENCE: the backend host spins down after inactivity, so the
-  // *first* request after a quiet period can legitimately take 20-40s to respond —
-  // nothing is broken, but a bare spinner reads as "frozen" and a 15s timeout reads
-  // as "the site is down." Neither is true. This escalates through honest status
-  // copy and retries with longer patience instead of failing outright on attempt one.
+  // *first* request after a quiet period can legitimately take up to ~60s to respond
+  // (observed directly via the keep-warm workflow's own ping logs — a genuinely cold
+  // instance sometimes exceeds 45s) — nothing is broken, but a bare spinner reads as
+  // "frozen" and a short timeout reads as "the site is down." Neither is true. This
+  // escalates through honest status copy and retries with real patience instead of
+  // failing outright.
   const COLD_START_STAGES = [
     { atMs: 0, text: 'Verifying credentials…' },
     { atMs: 3500, text: 'Establishing secure connection…' },
-    { atMs: 8000, text: 'The secure node is waking up from idle — this can take up to 30s on the first login…' },
-    { atMs: 20000, text: 'Still working on it, almost there…' },
+    { atMs: 8000, text: 'The secure node is waking up from idle — this can take up to a minute on the first login…' },
+    { atMs: 20000, text: 'Still working on it — a fully idle server can take a little while to spin back up…' },
+    { atMs: 40000, text: 'Almost there, thanks for your patience…' },
   ];
 
   const loginWithRetry = async (path, payload) => {
-    const attemptTimeouts = [12000, 25000, 40000];
+    const attemptTimeouts = [15000, 35000, 60000];
     let lastError;
 
     for (let attempt = 0; attempt < attemptTimeouts.length; attempt++) {
