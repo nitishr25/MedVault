@@ -1,0 +1,23 @@
+name: Keep backend warm
+
+# The backend runs on Render's free tier, which spins the instance down after
+# ~15 minutes of no traffic. The next request then pays a 20-40s cold-start
+# penalty — which reads to users as "the login is broken" or "the site is
+# down," not as the infrastructure trade-off it actually is. Pinging the
+# health endpoint well inside that 15-minute window keeps it warm so real
+# users essentially never hit a cold start during normal usage hours.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping backend health endpoint
+        run: |
+          curl -fsS --max-time 45 "https://medvault-4sia.onrender.com/api/v1/health" \
+            && echo "Backend responded OK" \
+            || echo "Backend did not respond in time (likely a cold start in progress) — this is informational, not a failure worth alerting on"
+        continue-on-error: true
