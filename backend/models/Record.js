@@ -74,8 +74,10 @@ sharedAccess: [{
 }, { timestamps: true });
 
 // Index optimizations to facilitate high-speed document lookups for authenticated sessions
+// (ipfsHash already gets a unique index from `unique: true` above — a second
+// non-unique index({ipfsHash:1}) here was redundant and logged a duplicate-index
+// warning on every boot)
 RecordSchema.index({ user: 1, createdAt: -1 });
-RecordSchema.index({ ipfsHash: 1 });
 
 // CRITICAL FIX: Instantiate the Mongoose model cleanly before exporting
 const Record = mongoose.model('Record', RecordSchema);

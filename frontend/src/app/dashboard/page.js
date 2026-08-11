@@ -3,7 +3,7 @@ import DemoBanner from '@/components/DemoBanner';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '../../lib/api';
-import { encryptFile, decryptFile } from '@/lib/encryption';
+import { encryptFile, decryptFile, unwrapToRawKey, rewrapKeyForRecipient } from '@/lib/encryption';
 import {
   Shield,
   ShieldCheck,
@@ -38,7 +38,9 @@ import {
   Eye,
   EyeOff,
   Building2,
-  Stethoscope
+  Stethoscope,
+  Menu,
+  X
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -65,6 +67,7 @@ export default function PremiumDashboard() {
   const [activeStaff, setActiveStaff] = useState([]);
   const [currentUser, setCurrentUser] = useState({ username: 'Operator', role: 'patient', email: '' });
   const isDemoUser = currentUser?.isDemo || currentUser?.username?.toLowerCase().includes('demo');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [directoryDoctors, setDirectoryDoctors] = useState([]);
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
@@ -581,14 +584,13 @@ export default function PremiumDashboard() {
     try {
       const authToken = localStorage.getItem('token');
       if (!authToken) throw new Error('Not authenticated');
-
-      const encryptionSecret = "MedVault-Stable-Secret-2026";
+      if (!currentUser?.publicKey) throw new Error('Missing your account\'s encryption key — try logging in again.');
 
       const file = fileInput.files[0];
       const title = titleInput.value.trim();
       const description = descInput.value.trim();
 
-      const { encryptedBlob, iv, wrappedKey, originalType } = await encryptFile(file, encryptionSecret);
+      const { encryptedBlob, iv, wrappedKey, originalType } = await encryptFile(file, currentUser.publicKey);
 
       const payload = new FormData();
       payload.append('file', encryptedBlob, file.name);
@@ -666,7 +668,26 @@ export default function PremiumDashboard() {
     });
 
     try {
-      const encryptionSecret = "MedVault-Stable-Secret-2026";
+      if (!currentUser?.privateKey) throw new Error('Missing your account\'s decryption key — try logging in again.');
+
+      // Every wrappedKey is RSA-wrapped under a specific person's public key.
+      // The owner's own copy lives on record.wrappedKey; anyone else who can
+      // see this record got there via a sharedAccess grant wrapped under
+      // *their* public key specifically — using the wrong one here would
+      // just fail to decrypt, not silently return someone else's data.
+      const viewerId = String(currentUser?._id || currentUser?.id || '');
+      const ownerId = String(record.user?._id || record.user?.id || record.user || '');
+      const isOwner = viewerId && viewerId === ownerId;
+
+      let recordWrappedKey = record.wrappedKey;
+      if (!isOwner) {
+        const myAccessEntry = record.sharedAccess?.find(a => {
+          const recId = String(a.recipient?._id || a.recipient?.id || a.recipient || '');
+          return recId === viewerId;
+        });
+        if (!myAccessEntry) throw new Error('You do not have a decryption grant for this record.');
+        recordWrappedKey = myAccessEntry.wrappedKey;
+      }
 
       const targetUrl = record.ipfsGatewayUrl || `https://gateway.pinata.cloud/ipfs/${record.ipfsHash}`;
       const response = await fetch(targetUrl);
@@ -680,8 +701,8 @@ export default function PremiumDashboard() {
       decryptedBuffer = await decryptFile(
         encryptedArrayBuffer,
         record.iv,
-        record.wrappedKey,
-        encryptionSecret
+        recordWrappedKey,
+        currentUser.privateKey
       );
 
       const mimeType = record.originalMimeType || 'application/pdf';
@@ -725,8 +746,7 @@ export default function PremiumDashboard() {
     try {
       const authToken = localStorage.getItem('token');
       if (!authToken) throw new Error('Authentication token missing from client session node.');
-
-      const encryptionSecret = "MedVault-Stable-Secret-2026";
+      if (!currentUser?.privateKey) throw new Error('Missing your account\'s decryption key — try logging in again.');
 
       console.log("🟢 STEP 1: Fetching Doctor's Key...");
       const docEmailClean = shareData.doctorEmail.toLowerCase().trim();
@@ -739,64 +759,24 @@ export default function PremiumDashboard() {
       }
       const { doctorId, publicKey: pemString } = keyResult.data;
 
-      console.log("🟢 STEP 2: Converting RSA Key...");
-      let doctorPublicKeyCrypto;
-      try {
-        const pemContents = pemString.replace(/-----BEGIN PUBLIC KEY-----/, '').replace(/-----END PUBLIC KEY-----/, '').replace(/\s+/g, '');
-        const binaryDerString = window.atob(pemContents);
-        const binaryDer = new Uint8Array(binaryDerString.length);
-        for (let i = 0; i < binaryDerString.length; i++) {
-          binaryDer[i] = binaryDerString.charCodeAt(i);
-        }
-        doctorPublicKeyCrypto = await crypto.subtle.importKey('spki', binaryDer.buffer, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
-      } catch (err) {
-        throw new Error("Failed at Step 2: RSA Key conversion rejected.");
-      }
-
-      console.log("🟢 STEP 3: Unwrapping Patient's Key...");
+      console.log("🟢 STEP 2: Unwrapping Your Own Key...");
       let rawDekBytes;
       try {
-        const baseKeyBytes = new TextEncoder().encode(encryptionSecret);
-        const baseKey = await crypto.subtle.importKey('raw', baseKeyBytes, 'HKDF', false, ['deriveKey']);
-        const patientKek = await crypto.subtle.deriveKey(
-          { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(16), info: new Uint8Array() },
-          baseKey,
-          { name: 'AES-GCM', length: 256 },
-          true,
-          ['unwrapKey']
-        );
-
         const wrappedKeyRaw = shareData.record.wrappedKey.data || shareData.record.wrappedKey;
-
-        const fileDek = await crypto.subtle.unwrapKey(
-          'raw',
-          new Uint8Array(wrappedKeyRaw),
-          patientKek,
-          { name: 'AES-GCM', iv: new Uint8Array(12) },
-          { name: 'AES-GCM', length: 256 },
-          true,
-          ['encrypt', 'decrypt']
-        );
-        rawDekBytes = await crypto.subtle.exportKey('raw', fileDek);
+        rawDekBytes = await unwrapToRawKey(wrappedKeyRaw, currentUser.privateKey);
       } catch (err) {
-        throw new Error("Failed at Step 3: Could not unwrap the original key.");
+        throw new Error("Failed at Step 2: Could not unwrap the original key with your account's private key.");
       }
 
-      console.log("🟢 STEP 4: Re-encrypting for Doctor...");
-      let doctorWrappedKeyBuffer;
+      console.log("🟢 STEP 3: Re-encrypting for Doctor...");
+      let sharedWrappedKeyArray;
       try {
-        doctorWrappedKeyBuffer = await crypto.subtle.encrypt(
-          { name: 'RSA-OAEP' },
-          doctorPublicKeyCrypto,
-          rawDekBytes
-        );
+        sharedWrappedKeyArray = await rewrapKeyForRecipient(rawDekBytes, pemString);
       } catch (err) {
-        throw new Error("Failed at Step 4: Could not wrap key for doctor.");
+        throw new Error("Failed at Step 3: Could not wrap key for doctor.");
       }
 
-      const sharedWrappedKeyArray = Array.from(new Uint8Array(doctorWrappedKeyBuffer));
-
-      console.log("🟢 STEP 5: Saving to Database...");
+      console.log("🟢 STEP 4: Saving to Database...");
       try {
         await api.post('/records/share', {
           recordId: shareData.record._id,
@@ -910,22 +890,41 @@ export default function PremiumDashboard() {
         />
       </div>
 
+      {/* MOBILE SIDEBAR BACKDROP */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-slate-950/70 backdrop-blur-sm lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* STICKY GLASSMORPHIC SIDEBAR NAVIGATION MODULE */}
-      <aside className="relative z-10 w-64 border-r border-slate-900 bg-slate-900/20 backdrop-blur-2xl flex flex-col justify-between shrink-0">
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-slate-900 bg-slate-950 lg:bg-slate-900/20 backdrop-blur-2xl flex flex-col justify-between shrink-0 transform transition-transform duration-300 ease-in-out lg:static lg:z-10 lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+      >
         <div>
           <div className="h-20 px-6 flex items-center gap-3 border-b border-slate-900/60">
             <div className="inline-flex items-center justify-center rounded-xl bg-gradient-to-br from-teal-500/10 to-emerald-500/10 p-2.5 ring-1 ring-teal-500/20 shadow-inner">
               <Shield className="h-5 w-5 text-teal-400" />
             </div>
-            <div className="flex flex-col">
+            <div className="flex flex-col flex-1">
               <span className="text-base font-black tracking-wider text-white uppercase bg-clip-text bg-gradient-to-b from-white to-slate-400">MedVault</span>
               <span className="text-[9px] text-slate-500 font-mono tracking-widest uppercase">Decentralized</span>
             </div>
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(false)}
+              className="lg:hidden p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-900 transition-colors"
+              aria-label="Close menu"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
           <nav className="p-4 space-y-1.5">
             <button
-              onClick={() => setActiveTab('overview')}
+              onClick={() => { setActiveTab('overview'); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 h-11 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'overview'
                 ? 'bg-gradient-to-r from-teal-500/10 to-teal-500/5 text-teal-400 ring-1 ring-teal-500/20 shadow-lg shadow-teal-950/20'
                 : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'
@@ -938,7 +937,7 @@ export default function PremiumDashboard() {
             {/* STRICT ROLE GUARD: ONLY PATIENTS SEE MY NETWORK */}
             {currentUser?.role === 'patient' && (
               <button
-                onClick={() => setActiveTab('network')}
+                onClick={() => { setActiveTab('network'); setIsSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 h-11 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'network'
                   ? 'bg-gradient-to-r from-teal-500/10 to-teal-500/5 text-teal-400 ring-1 ring-teal-500/20 shadow-lg shadow-teal-950/20'
                   : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'
@@ -952,7 +951,7 @@ export default function PremiumDashboard() {
             {/* STRICT ROLE GUARD: ADMINS EXCLUDED FROM MEDICAL RECORDS */}
             {(currentUser?.role === 'doctor' || currentUser?.role === 'patient') && (
               <button
-                onClick={() => setActiveTab('records')}
+                onClick={() => { setActiveTab('records'); setIsSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 h-11 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'records'
                   ? 'bg-gradient-to-r from-teal-500/10 to-teal-500/5 text-teal-400 ring-1 ring-teal-500/20 shadow-lg shadow-teal-950/20'
                   : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'
@@ -966,7 +965,7 @@ export default function PremiumDashboard() {
             {/* STRICT ROLE GUARD: ADMINS ONLY AUDIT LOGS */}
             {(currentUser?.role === 'admin' || currentUser?.role === 'hospital_admin') && (
               <button
-                onClick={() => setActiveTab('audit-logs')}
+                onClick={() => { setActiveTab('audit-logs'); setIsSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 h-11 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'audit-logs'
                   ? 'bg-gradient-to-r from-teal-500/10 to-teal-500/5 text-teal-400 ring-1 ring-teal-500/20 shadow-lg shadow-teal-950/20'
                   : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'
@@ -980,7 +979,7 @@ export default function PremiumDashboard() {
             {/* STRICT ROLE GUARD: ONLY PATIENTS CAN UPLOAD */}
             {currentUser?.role === 'patient' && (
               <button
-                onClick={() => setActiveTab('upload')}
+                onClick={() => { setActiveTab('upload'); setIsSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 h-11 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'upload'
                   ? 'bg-gradient-to-r from-teal-500/10 to-teal-500/5 text-teal-400 ring-1 ring-teal-500/20 shadow-lg shadow-teal-950/20'
                   : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'
@@ -992,7 +991,7 @@ export default function PremiumDashboard() {
             )}
 
             <button
-              onClick={() => setActiveTab('settings')}
+              onClick={() => { setActiveTab('settings'); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 h-11 rounded-xl text-sm font-semibold tracking-wide transition-all ${activeTab === 'settings'
                 ? 'bg-gradient-to-r from-teal-500/10 to-teal-500/5 text-teal-400 ring-1 ring-teal-500/20 shadow-lg shadow-teal-950/20'
                 : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'
@@ -1042,9 +1041,19 @@ export default function PremiumDashboard() {
 
         {/* INTERACTIVE WORKSPACE SUBHEADER */}
         <header className="min-h-20 border-b border-slate-900/60 px-4 sm:px-8 py-3 flex flex-wrap items-center justify-between gap-3 bg-slate-950/20 backdrop-blur-xl shrink-0">
-          <div className="min-w-0">
-            <h2 className="text-sm font-bold tracking-wide text-white truncate">MedVault Management Dashboard</h2>
-            <p className="text-xs text-slate-500 font-medium mt-0.5 truncate hidden lg:block">Secure, decentralized cross-origin framework nodes reporting stable.</p>
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden p-2 -ml-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors shrink-0"
+              aria-label="Open menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div className="min-w-0">
+              <h2 className="text-sm font-bold tracking-wide text-white truncate">MedVault Management Dashboard</h2>
+              <p className="text-xs text-slate-500 font-medium mt-0.5 truncate hidden lg:block">Secure, decentralized cross-origin framework nodes reporting stable.</p>
+            </div>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <DemoBanner user={currentUser} />
@@ -1065,26 +1074,26 @@ export default function PremiumDashboard() {
           </div>
         </header>
 
-        <main className="p-8 max-w-6xl w-full mx-auto space-y-8 flex-1">
+        <main className="p-4 sm:p-6 lg:p-8 max-w-6xl w-full mx-auto space-y-5 sm:space-y-8 flex-1">
 
           {/* TELEMETRY METRIC SECTION CARDS MATRIX */}
-          <section className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-            <div className="bg-slate-900/20 backdrop-blur-2xl border border-slate-900 p-5 rounded-2xl relative overflow-hidden group">
+          <section className="grid grid-cols-3 gap-2.5 sm:gap-5">
+            <div className="bg-slate-900/20 backdrop-blur-2xl border border-slate-900 p-3 sm:p-5 rounded-xl sm:rounded-2xl relative overflow-hidden group">
               <div className="absolute top-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-teal-500/20 to-transparent group-hover:via-teal-500/40 transition-all duration-700" />
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Encryption</span>
-                <Activity className="h-4 w-4 text-teal-400" />
+              <div className="flex items-center justify-between mb-1.5 sm:mb-3">
+                <span className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Encryption</span>
+                <Activity className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-teal-400 shrink-0 ml-1" />
               </div>
-              <h3 className="text-2xl font-black text-white tracking-tight">Active</h3>
+              <h3 className="text-base sm:text-2xl font-black text-white tracking-tight">Active</h3>
             </div>
 
-            <div className="bg-slate-900/20 backdrop-blur-2xl border border-slate-900 p-5 rounded-2xl relative overflow-hidden group">
+            <div className="bg-slate-900/20 backdrop-blur-2xl border border-slate-900 p-3 sm:p-5 rounded-xl sm:rounded-2xl relative overflow-hidden group">
               <div className="absolute top-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-sky-500/20 to-transparent group-hover:via-sky-500/40 transition-all duration-700" />
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Records</span>
-                <Database className="h-4 w-4 text-sky-400" />
+              <div className="flex items-center justify-between mb-1.5 sm:mb-3">
+                <span className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Records</span>
+                <Database className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-sky-400 shrink-0 ml-1" />
               </div>
-              <h3 className="text-2xl font-black text-white tracking-tight font-mono">
+              <h3 className="text-base sm:text-2xl font-black text-white tracking-tight font-mono">
                 {isLoading ? "SYNC" : String(
                   (currentUser?.role === 'admin' || currentUser?.role === 'hospital_admin')
                     ? (adminTelemetry?.totalRecords || 0)
@@ -1093,13 +1102,13 @@ export default function PremiumDashboard() {
               </h3>
             </div>
 
-            <div className="bg-slate-900/20 backdrop-blur-2xl border border-slate-900 p-5 rounded-2xl relative overflow-hidden group">
+            <div className="bg-slate-900/20 backdrop-blur-2xl border border-slate-900 p-3 sm:p-5 rounded-xl sm:rounded-2xl relative overflow-hidden group">
               <div className="absolute top-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-purple-500/20 to-transparent group-hover:via-purple-500/40 transition-all duration-700" />
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">User Role</span>
-                <UserCheck className="h-4 w-4 text-purple-400" />
+              <div className="flex items-center justify-between mb-1.5 sm:mb-3">
+                <span className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Role</span>
+                <UserCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-400 shrink-0 ml-1" />
               </div>
-              <h3 className="text-2xl font-black text-white tracking-tight capitalize">{currentUser?.role}</h3>
+              <h3 className="text-base sm:text-2xl font-black text-white tracking-tight capitalize truncate">{currentUser?.role}</h3>
             </div>
           </section>
 
@@ -1107,21 +1116,21 @@ export default function PremiumDashboard() {
           <section className="bg-slate-900/10 backdrop-blur-2xl border border-slate-900 rounded-2xl overflow-hidden shadow-[0_30px_80px_rgba(0,0,0,0.6)] relative">
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-800 to-transparent" />
 
-            <div className="p-6 border-b border-slate-900 bg-slate-950/20 flex items-center justify-between">
+            <div className="p-4 sm:p-6 border-b border-slate-900 bg-slate-950/20 flex items-center justify-between">
               <h3 className="text-sm font-bold tracking-wider text-white uppercase">{activeTab} Workspace</h3>
               <div className="text-[10px] text-slate-600 font-mono uppercase tracking-widest"></div>
             </div>
 
-            <div className="p-8">
+            <div className="p-4 sm:p-6 lg:p-8">
 
               {/* LAYOUT STAGE 1: SYSTEM MANAGEMENT CONSOLE OVERVIEW */}
               {activeTab === 'overview' && (
-                <div className="space-y-6 py-1 animate-fadeIn">
+                <div className="space-y-4 sm:space-y-6 py-1 animate-fadeIn">
 
                   {/* WELCOME BANNER SECTION GRID */}
-                  <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-6 rounded-2xl border border-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <h3 className="text-lg font-black text-white tracking-wide capitalize">
+                  <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-4 sm:p-6 rounded-2xl border border-slate-900">
+                    <div className="space-y-1 min-w-0">
+                      <h3 className="text-base sm:text-lg font-black text-white tracking-wide capitalize truncate">
                         Welcome Back, {currentUser?.username || "User"}
                       </h3>
                       <p className="text-xs text-slate-500">
@@ -1134,21 +1143,17 @@ export default function PremiumDashboard() {
                               : "Your records are up to date."}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] font-mono bg-slate-900/50 border border-slate-800 px-3 py-1.5 rounded-xl text-slate-400">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                      Cluster Node: Connected
-                    </div>
                   </div>
 
                   {/* LIVE DATABASE-DRIVEN METRIC COUNTERS */}
-                  <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                  <div className="w-full grid grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4 mb-4 sm:mb-6">
                     {currentUser?.role === 'doctor' ? (
                       <>
                         {/* DOCTOR CARD 1: PATIENTS GRANTED ACCESS */}
-                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-2xl p-4 flex items-center justify-between group overflow-hidden">
+                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center justify-between group overflow-hidden">
                           <div className="space-y-1 min-w-0">
                             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Patients Access</span>
-                            <span className="text-xl font-black text-white block tracking-tight">
+                            <span className="text-base sm:text-xl font-black text-white block tracking-tight">
                               {patientRoster.length}
                             </span>
                           </div>
@@ -1158,10 +1163,10 @@ export default function PremiumDashboard() {
                         </div>
 
                         {/* DOCTOR CARD 2: PENDING INBOUND REQUESTS */}
-                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-2xl p-4 flex items-center justify-between group overflow-hidden">
+                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center justify-between group overflow-hidden">
                           <div className="space-y-1 min-w-0">
                             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Pending Inbound</span>
-                            <span className="text-xl font-black text-amber-400 block tracking-tight">
+                            <span className="text-base sm:text-xl font-black text-amber-400 block tracking-tight">
                               {dashboardStats?.pendingRequests?.length || 0}
                             </span>
                           </div>
@@ -1173,10 +1178,10 @@ export default function PremiumDashboard() {
                     ) : (currentUser?.role === 'admin' || currentUser?.role === 'hospital_admin') ? (
                       <>
                         {/* ADMIN CARD 1: AUDIT TRAIL SUMMARY */}
-                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-2xl p-4 flex items-center justify-between group overflow-hidden">
+                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center justify-between group overflow-hidden">
                           <div className="space-y-1 min-w-0">
                             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Audit Trail</span>
-                            <span className="text-xl font-black text-indigo-400 block tracking-tight">
+                            <span className="text-base sm:text-xl font-black text-indigo-400 block tracking-tight">
                               Active
                             </span>
                           </div>
@@ -1186,7 +1191,7 @@ export default function PremiumDashboard() {
                         </div>
 
                         {/* ADMIN CARD 2: NODE HEALTH */}
-                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-2xl p-4 flex items-center justify-between group overflow-hidden">
+                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center justify-between group overflow-hidden">
                           <div className="space-y-1 min-w-0">
                             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Node Health</span>
                             <div className="flex items-center gap-2 mt-1">
@@ -1194,7 +1199,7 @@ export default function PremiumDashboard() {
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                               </span>
-                              <span className="text-xl font-black text-white block tracking-tight">
+                              <span className="text-base sm:text-xl font-black text-white block tracking-tight">
                                 Connected
                               </span>
                             </div>
@@ -1205,25 +1210,25 @@ export default function PremiumDashboard() {
                         </div>
 
                         {/* HOSPITAL NETWORK SCALE */}
-                        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 flex flex-col justify-center">
-                          <div className="flex items-center justify-between mb-4">
-                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Hospital Network</p>
-                            <div className="p-2 bg-blue-500/10 rounded-lg">
-                              <Users className="w-4 h-4 text-blue-500" />
+                        <div className="col-span-2 lg:col-span-1 bg-slate-900/50 border border-slate-800 rounded-xl sm:rounded-2xl p-3 sm:p-6 flex flex-col justify-center">
+                          <div className="flex items-center justify-between mb-2 sm:mb-4">
+                            <p className="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider truncate">Hospital Network</p>
+                            <div className="p-1.5 sm:p-2 bg-blue-500/10 rounded-lg shrink-0 ml-1">
+                              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500" />
                             </div>
                           </div>
 
                           <div className="flex space-x-6">
                             <div>
-                              <p className="text-xs text-slate-400 mb-1 uppercase tracking-wider">Patients</p>
-                              <h3 className="text-2xl font-bold text-white">
+                              <p className="text-[10px] sm:text-xs text-slate-400 mb-1 uppercase tracking-wider">Patients</p>
+                              <h3 className="text-lg sm:text-2xl font-bold text-white">
                                 {adminTelemetry?.totalPatients || 0}
                               </h3>
                             </div>
                             <div className="w-px bg-slate-800"></div>
                             <div>
-                              <p className="text-xs text-slate-400 mb-1 uppercase tracking-wider">Doctors</p>
-                              <h3 className="text-2xl font-bold text-teal-400">
+                              <p className="text-[10px] sm:text-xs text-slate-400 mb-1 uppercase tracking-wider">Doctors</p>
+                              <h3 className="text-lg sm:text-2xl font-bold text-teal-400">
                                 {adminTelemetry?.totalDoctors || 0}
                               </h3>
                             </div>
@@ -1233,10 +1238,10 @@ export default function PremiumDashboard() {
                     ) : (
                       <>
                         {/* PATIENT CARD 1: TOTAL RECORDS */}
-                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-2xl p-4 flex items-center justify-between group overflow-hidden">
+                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center justify-between group overflow-hidden">
                           <div className="space-y-1 min-w-0">
                             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Total Records</span>
-                            <span className="text-xl font-black text-white block tracking-tight">
+                            <span className="text-base sm:text-xl font-black text-white block tracking-tight">
                               {dashboardStats?.totalRecords ?? dbRecords.length}
                             </span>
                           </div>
@@ -1246,10 +1251,10 @@ export default function PremiumDashboard() {
                         </div>
 
                         {/* PATIENT CARD 2: STORAGE FOOTPRINTS */}
-                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-2xl p-4 flex items-center justify-between group overflow-hidden">
+                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center justify-between group overflow-hidden">
                           <div className="space-y-1 min-w-0">
                             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Storage Allocated</span>
-                            <span className="text-xl font-black text-emerald-400 block tracking-tight">
+                            <span className="text-base sm:text-xl font-black text-emerald-400 block tracking-tight">
                               {dashboardStats?.totalStorage || '0.00 MB'}
                             </span>
                           </div>
@@ -1259,10 +1264,10 @@ export default function PremiumDashboard() {
                         </div>
 
                         {/* PATIENT CARD 3: ACTIVE DOCTORS */}
-                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-2xl p-4 flex items-center justify-between group overflow-hidden">
+                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center justify-between group overflow-hidden">
                           <div className="space-y-1 min-w-0">
                             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Active Doctors</span>
-                            <span className="text-xl font-black text-amber-400 block tracking-tight">
+                            <span className="text-base sm:text-xl font-black text-amber-400 block tracking-tight">
                               {patientConnections.filter(c => c.status === 'active').length} Connected
                             </span>
                           </div>
@@ -1279,121 +1284,167 @@ export default function PremiumDashboard() {
                     <>
                       {/* --- START OF PENDING APPROVALS SECTION --- */}
                       <div className="bg-slate-950/40 border border-slate-900 rounded-2xl overflow-hidden mb-8 shadow-[0_8px_30px_rgb(0,0,0,0.4)]">
-                        <div className="p-5 border-b border-slate-900/80 bg-slate-950/60 flex justify-between items-center">
-                          <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                        <div className="p-4 sm:p-5 border-b border-slate-900/80 bg-slate-950/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-8 w-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
                               <ShieldAlert className="h-4 w-4 text-amber-500" />
                             </div>
-                            <h3 className="text-sm font-bold text-white tracking-wide uppercase">
+                            <h3 className="text-sm font-bold text-white tracking-wide uppercase truncate">
                               Pending Operator Verifications
                             </h3>
                           </div>
 
-                          <span className="text-xs font-bold px-2.5 py-1 bg-amber-500/10 text-amber-400 rounded-md border border-amber-500/20">
+                          <span className="self-start sm:self-auto shrink-0 text-xs font-bold px-2.5 py-1 bg-amber-500/10 text-amber-400 rounded-md border border-amber-500/20 whitespace-nowrap">
                             {adminTelemetry?.pendingCount || 0} Action Required
                           </span>
                         </div>
 
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-slate-400 uppercase bg-slate-950/80 border-b border-slate-900">
-                              <tr>
-                                <th className="px-6 py-4 font-bold tracking-wider">Operator Info</th>
-                                <th className="px-6 py-4 font-bold tracking-wider">Declared Specialty</th>
-                                <th className="px-6 py-4 font-bold tracking-wider">Date</th>
-                                <th className="px-6 py-4 font-bold tracking-wider text-right">Action</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-900/40">
-                              {/* 🛡️ ADMIN VIEW */}
-                              {adminTelemetry?.pendingDoctors?.length > 0 ? (
-                                adminTelemetry.pendingDoctors.map((doc) => (
-                                  <tr key={doc._id} className="bg-slate-900/20 hover:bg-slate-900/50 transition-colors">
-                                    <td className="px-6 py-4">
-                                      <p className="text-white font-bold">{doc.username}</p>
-                                      <p className="text-xs text-slate-500 font-mono mt-0.5">{doc.email}</p>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                      <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase tracking-wider">
-                                        {doc.specialty || 'General Practice'}
-                                      </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-xs font-mono text-slate-400">
-                                      {new Date(doc.createdAt).toLocaleDateString()}
-                                    </td>
-                                    <td className="px-6 py-4 text-right whitespace-nowrap">
-                                      <div className="flex justify-end items-center gap-3">
-                                        <button onClick={() => handleVerifyNode(doc._id, 'approve')} className="px-4 py-2 flex items-center gap-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-lg text-[11px] hover:bg-emerald-500/20 transition-colors">
-                                          <Shield className="h-3.5 w-3.5" /> Approve
-                                        </button>
-                                        <button onClick={() => handleVerifyNode(doc._id, 'reject')} className="px-4 py-2 bg-rose-500/10 text-rose-400 border border-rose-500/50 rounded-lg text-[11px] hover:bg-rose-500/20 transition-colors">
-                                          Reject
-                                        </button>
-                                      </div>
-                                    </td>
+                        {adminTelemetry?.pendingDoctors?.length > 0 ? (
+                          <>
+                            {/* DESKTOP/TABLET: FULL DATA TABLE */}
+                            <div className="hidden md:block overflow-x-auto">
+                              <table className="w-full text-sm text-left">
+                                <thead className="text-xs text-slate-400 uppercase bg-slate-950/80 border-b border-slate-900">
+                                  <tr>
+                                    <th className="px-6 py-4 font-bold tracking-wider">Operator Info</th>
+                                    <th className="px-6 py-4 font-bold tracking-wider">Declared Specialty</th>
+                                    <th className="px-6 py-4 font-bold tracking-wider">Date</th>
+                                    <th className="px-6 py-4 font-bold tracking-wider text-right">Action</th>
                                   </tr>
-                                ))
-                              ) : (
-                                <tr>
-                                  <td colSpan="4" className="px-6 py-12 text-center text-slate-500">
-                                    <p className="font-medium text-xs">No pending operator verifications in the queue.</p>
-                                  </td>
-                                </tr>
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
+                                </thead>
+                                <tbody className="divide-y divide-slate-900/40">
+                                  {adminTelemetry.pendingDoctors.map((doc) => (
+                                    <tr key={doc._id} className="bg-slate-900/20 hover:bg-slate-900/50 transition-colors">
+                                      <td className="px-6 py-4">
+                                        <p className="text-white font-bold">{doc.username}</p>
+                                        <p className="text-xs text-slate-500 font-mono mt-0.5">{doc.email}</p>
+                                      </td>
+                                      <td className="px-6 py-4">
+                                        <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase tracking-wider">
+                                          {doc.specialty || 'General Practice'}
+                                        </span>
+                                      </td>
+                                      <td className="px-6 py-4 text-xs font-mono text-slate-400">
+                                        {new Date(doc.createdAt).toLocaleDateString()}
+                                      </td>
+                                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                                        <div className="flex justify-end items-center gap-3">
+                                          <button onClick={() => handleVerifyNode(doc._id, 'approve')} className="px-4 py-2 flex items-center gap-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-lg text-[11px] hover:bg-emerald-500/20 transition-colors">
+                                            <Shield className="h-3.5 w-3.5" /> Approve
+                                          </button>
+                                          <button onClick={() => handleVerifyNode(doc._id, 'reject')} className="px-4 py-2 bg-rose-500/10 text-rose-400 border border-rose-500/50 rounded-lg text-[11px] hover:bg-rose-500/20 transition-colors">
+                                            Reject
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* MOBILE: STACKED CARDS — NO HORIZONTAL SCROLL */}
+                            <div className="md:hidden divide-y divide-slate-900/40">
+                              {adminTelemetry.pendingDoctors.map((doc) => (
+                                <div key={doc._id} className="p-4 space-y-3">
+                                  <div className="min-w-0">
+                                    <p className="text-white font-bold text-sm truncate">{doc.username}</p>
+                                    <p className="text-xs text-slate-500 font-mono mt-0.5 truncate">{doc.email}</p>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                                    <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase tracking-wider">
+                                      {doc.specialty || 'General Practice'}
+                                    </span>
+                                    <span className="text-[11px] font-mono text-slate-400">
+                                      {new Date(doc.createdAt).toLocaleDateString()}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <button onClick={() => handleVerifyNode(doc._id, 'approve')} className="flex-1 px-4 py-2 flex items-center justify-center gap-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-lg text-[11px] font-bold hover:bg-emerald-500/20 transition-colors">
+                                      <Shield className="h-3.5 w-3.5" /> Approve
+                                    </button>
+                                    <button onClick={() => handleVerifyNode(doc._id, 'reject')} className="flex-1 px-4 py-2 bg-rose-500/10 text-rose-400 border border-rose-500/50 rounded-lg text-[11px] font-bold hover:bg-rose-500/20 transition-colors">
+                                      Reject
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="px-6 py-12 text-center text-slate-500">
+                            <p className="font-medium text-xs">No pending operator verifications in the queue.</p>
+                          </div>
+                        )}
                       </div>
                       {/* --- END OF PENDING APPROVALS SECTION --- */}
 
                       {/* --- CARD 2: ACTIVE CLINICAL PERSONNEL WORKLOAD --- */}
                       <div className="bg-slate-950/40 border border-slate-900 rounded-2xl overflow-hidden mb-6 shadow-[0_8px_30px_rgb(0,0,0,0.4)]">
-                        <div className="p-5 border-b border-slate-900/80 bg-slate-950/60 flex items-center gap-3">
+                        <div className="p-4 sm:p-5 border-b border-slate-900/80 bg-slate-950/60 flex items-center gap-3">
                           <div className="h-8 w-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
                             <Users className="h-4 w-4 text-blue-500" />
                           </div>
                           <h3 className="text-sm font-bold text-white tracking-wide">Active Clinical Personnel</h3>
                         </div>
 
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-slate-400 uppercase bg-slate-950/80 border-b border-slate-900">
-                              <tr>
-                                <th className="px-6 py-4 font-bold tracking-wider">Doctor Name</th>
-                                <th className="px-6 py-4 font-bold tracking-wider">Specialty</th>
-                                <th className="px-6 py-4 font-bold tracking-wider text-center">Patient Count</th>
-                                <th className="px-6 py-4 font-bold tracking-wider text-center">Record Count</th>
-
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-900/40">
-                              {(!activeStaff || activeStaff.length === 0) ? (
-                                <tr>
-                                  <td colSpan="3" className="px-6 py-12 text-center text-slate-500">
-                                    No verified clinical staff active on network.
-                                  </td>
-                                </tr>
-                              ) : (
-                                activeStaff.map((doctor) => (
-                                  <tr key={doctor._id} className="bg-slate-900/20 hover:bg-slate-900/50 transition-colors">
-                                    <td className="px-6 py-4 font-medium text-white">{doctor.username}</td>
-                                    <td className="px-6 py-4">
-                                      <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase tracking-wider">
-                                        {doctor.specialty}
-                                      </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-center">
-                                      <span className="text-blue-400 font-bold">{doctor.patientCount} </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-center">
-                                      <span className="text-blue-400 font-bold">{doctor.recordCount || 0}</span>
-                                    </td>
+                        {(!activeStaff || activeStaff.length === 0) ? (
+                          <div className="px-6 py-12 text-center text-slate-500">
+                            No verified clinical staff active on network.
+                          </div>
+                        ) : (
+                          <>
+                            {/* DESKTOP/TABLET: FULL DATA TABLE */}
+                            <div className="hidden md:block overflow-x-auto">
+                              <table className="w-full text-sm text-left">
+                                <thead className="text-xs text-slate-400 uppercase bg-slate-950/80 border-b border-slate-900">
+                                  <tr>
+                                    <th className="px-6 py-4 font-bold tracking-wider">Doctor Name</th>
+                                    <th className="px-6 py-4 font-bold tracking-wider">Specialty</th>
+                                    <th className="px-6 py-4 font-bold tracking-wider text-center">Patient Count</th>
+                                    <th className="px-6 py-4 font-bold tracking-wider text-center">Record Count</th>
                                   </tr>
-                                ))
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
+                                </thead>
+                                <tbody className="divide-y divide-slate-900/40">
+                                  {activeStaff.map((doctor) => (
+                                    <tr key={doctor._id} className="bg-slate-900/20 hover:bg-slate-900/50 transition-colors">
+                                      <td className="px-6 py-4 font-medium text-white">{doctor.username}</td>
+                                      <td className="px-6 py-4">
+                                        <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase tracking-wider">
+                                          {doctor.specialty}
+                                        </span>
+                                      </td>
+                                      <td className="px-6 py-4 text-center">
+                                        <span className="text-blue-400 font-bold">{doctor.patientCount} </span>
+                                      </td>
+                                      <td className="px-6 py-4 text-center">
+                                        <span className="text-blue-400 font-bold">{doctor.recordCount || 0}</span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* MOBILE: STACKED CARDS — NO HORIZONTAL SCROLL */}
+                            <div className="md:hidden divide-y divide-slate-900/40">
+                              {activeStaff.map((doctor) => (
+                                <div key={doctor._id} className="p-4 space-y-2">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <p className="font-medium text-white text-sm truncate">{doctor.username}</p>
+                                    <span className="shrink-0 px-2.5 py-1 rounded-md text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase tracking-wider">
+                                      {doctor.specialty}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-4 text-xs">
+                                    <span className="text-slate-500">Patients: <span className="text-blue-400 font-bold">{doctor.patientCount}</span></span>
+                                    <span className="text-slate-500">Records: <span className="text-blue-400 font-bold">{doctor.recordCount || 0}</span></span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
                       </div>
                     </>
                   )}
@@ -1403,8 +1454,8 @@ export default function PremiumDashboard() {
                     <div className="space-y-6">
 
                       {/* PENDING APPROVALS WIDGET */}
-                      <div className="bg-slate-900/40 border border-slate-900 rounded-2xl p-6">
-                        <div className="flex items-center justify-between mb-4">
+                      <div className="bg-slate-900/40 border border-slate-900 rounded-2xl p-4 sm:p-6">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                           <h4 className="text-[10px] font-bold text-amber-500 tracking-widest uppercase flex items-center gap-2">
                             <UserPlus className="h-3.5 w-3.5" /> Pending Access Approvals
                           </h4>
@@ -1488,7 +1539,7 @@ export default function PremiumDashboard() {
 
                     {/* RECENT ACTIVITY TIMELINE FEED (HIDDEN FOR ALL ADMINS) */}
                     {(currentUser?.role === 'patient' || currentUser?.role === 'doctor') && (
-                      <div className={`bg-slate-950/40 border border-slate-900 rounded-2xl p-5 flex flex-col justify-between ${currentUser?.role !== 'super_admin' ? 'lg:col-span-3' : ''}`}>
+                      <div className={`bg-slate-950/40 border border-slate-900 rounded-2xl p-4 sm:p-5 flex flex-col justify-between ${currentUser?.role !== 'super_admin' ? 'lg:col-span-3' : ''}`}>
                         <div className="space-y-4">
                           <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
                             <Clock className="h-3.5 w-3.5 text-indigo-400" /> Recent Activity
@@ -1627,7 +1678,7 @@ export default function PremiumDashboard() {
                 <div className="space-y-6">
                   {currentUser?.role === 'doctor' && !activePatient ? (
                     /* DOCTOR ONLY: MY PATIENTS ROSTER VIEW */
-                    <div className="overflow-x-auto rounded-xl border border-slate-900 bg-slate-950/40 p-5 space-y-4">
+                    <div className="rounded-xl border border-slate-900 bg-slate-950/40 p-5 space-y-4">
                       <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-900/80 pb-3">My Patients</h3>
                       {patientRoster.length === 0 ? (
                         <div className="text-center py-10 text-xs font-medium text-slate-500">
@@ -1636,16 +1687,16 @@ export default function PremiumDashboard() {
                       ) : (
                         <div className="space-y-3">
                           {patientRoster.map((patient) => (
-                            <div key={patient.id} className="flex justify-between items-center p-4 bg-slate-900/30 hover:bg-slate-900/60 border border-slate-800/60 rounded-xl transition-colors">
-                              <div>
-                                <h4 className="font-bold text-white text-sm">{patient.username}</h4>
-                                <div className="flex items-center gap-2 mt-1">
+                            <div key={patient.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-slate-900/30 hover:bg-slate-900/60 border border-slate-800/60 rounded-xl transition-colors">
+                              <div className="min-w-0">
+                                <h4 className="font-bold text-white text-sm truncate">{patient.username}</h4>
+                                <div className="flex flex-wrap items-center gap-2 mt-1">
                                   {patient.status === 'Granted' ? (
-                                    <span className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-[9px] uppercase font-bold tracking-wider">Access Granted</span>
+                                    <span className="shrink-0 px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-[9px] uppercase font-bold tracking-wider">Access Granted</span>
                                   ) : (
-                                    <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded text-[9px] uppercase font-bold tracking-wider">Pending Auth</span>
+                                    <span className="shrink-0 px-1.5 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded text-[9px] uppercase font-bold tracking-wider">Pending Auth</span>
                                   )}
-                                  <p className="text-[11px] text-slate-500 font-mono">
+                                  <p className="text-[11px] text-slate-500 font-mono truncate">
                                     Last record: {patient.lastActivity} • {patient.recordCount} records
                                   </p>
                                 </div>
@@ -1653,7 +1704,7 @@ export default function PremiumDashboard() {
                               <button
                                 onClick={() => setActivePatient(patient)}
                                 disabled={patient.status !== 'Granted'}
-                                className="px-4 py-2 bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 border border-teal-500/20 rounded-lg text-xs font-bold transition-all flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
+                                className="shrink-0 px-4 py-2 bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 border border-teal-500/20 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
                               >
                                 View Records <ExternalLink className="h-3 w-3" />
                               </button>
@@ -1701,79 +1752,137 @@ export default function PremiumDashboard() {
                         />
                       </div>
 
-                      <div className="overflow-x-auto rounded-xl border border-slate-900 bg-slate-950/40">
-                        {isLoading ? (
-                          <div className="text-center py-16 text-xs font-semibold text-slate-500 flex items-center justify-center gap-3">
-                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-teal-500/30 border-t-teal-400" />
-                            Streaming encrypted ledger arrays from decentralized indexer...
-                          </div>
-                        ) : filteredRecords.filter(r => !activePatient || r.user?._id === activePatient.id).length === 0 ? (
-                          <div className="text-center py-20 text-xs font-medium text-slate-500 space-y-2">
-                            <p>No records found.</p>
-                            <p className="text-[10px] text-slate-700 font-mono"></p>
-                          </div>
-                        ) : (
-                          <table className="w-full text-left text-xs text-slate-400">
-                            <thead className="text-[10px] text-slate-400 font-bold uppercase tracking-widest bg-slate-950 border-b border-slate-900/80">
-                              <tr>
-                                <th className="px-6 py-4">Record Title</th>
-                                <th className="px-6 py-4">Storage IPFS Hash</th>
-                                <th className="px-6 py-4">File Size</th>
-                                <th className="px-6 py-4">Verification Status</th>
-                                <th className="px-6 py-4 text-right">Actions</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-900/40 font-medium">
-                              {filteredRecords.filter(r => !activePatient || r.user?._id === activePatient.id).map((record) => (
-                                <tr key={record._id || record.id} className="hover:bg-slate-900/30 transition-all group/row">
-                                  <td className="px-6 py-4 font-bold text-white max-w-[220px] truncate">
-                                    {record.title || "Untitled Fragment"}
-                                  </td>
-                                  <td className="px-6 py-4 font-mono text-teal-400 max-w-[260px] truncate relative">
-                                    <button
-                                      type="button"
-                                      onClick={() => handlePreviewRecord(record)}
-                                      className="hover:text-teal-300 inline-flex items-center gap-1.5 transition-colors text-left"
-                                      title="Decrypt and view record"
-                                    >
-                                      {record.ipfsHash || "Processing identity block..."}
-                                      <ExternalLink className="h-3 w-3 opacity-0 group-hover/row:opacity-100 transition-opacity text-slate-500 shrink-0" />
-                                    </button>
-                                  </td>
-                                  <td className="px-6 py-4 text-xs font-mono text-slate-500">
-                                    {record.fileSize || "0.00 MB"}
-                                  </td>
-                                  <td className="px-6 py-4">
-                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-teal-500/5 text-teal-400 border border-teal-500/10">
-                                      Verified Secure
-                                    </span>
-                                  </td>
-                                  <td className="px-6 py-4 text-right">
-                                    <div className="flex justify-end gap-2">
-                                      {(currentUser?.role === 'patient' || currentUser?.role === 'admin' || currentUser?.role === 'hospital_admin') && (
-                                        <button
-                                          onClick={() => openShareModal(record)}
-                                          className="px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-[11px] font-bold text-purple-400 hover:bg-purple-500 hover:text-slate-950 transition-all flex items-center gap-1.5"
-                                        >
-                                          <UserCheck className="h-3.5 w-3.5" /> Share
-                                        </button>
-                                      )}
-                                      {currentUser?.role === 'doctor' && (
-                                        <button
-                                          onClick={() => handlePreviewRecord(record)}
-                                          className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] font-bold text-amber-400 hover:bg-amber-500 hover:text-slate-950 transition-all flex items-center gap-1.5"
-                                        >
-                                          <FileCheck className="h-3.5 w-3.5" /> View & Remark
-                                        </button>
-                                      )}
+                      {(() => {
+                        const visibleRecords = filteredRecords.filter(r => !activePatient || r.user?._id === activePatient.id);
+                        return (
+                          <div className="rounded-xl border border-slate-900 bg-slate-950/40">
+                            {isLoading ? (
+                              <div className="text-center py-16 text-xs font-semibold text-slate-500 flex items-center justify-center gap-3">
+                                <span className="h-4 w-4 animate-spin rounded-full border-2 border-teal-500/30 border-t-teal-400" />
+                                Streaming encrypted ledger arrays from decentralized indexer...
+                              </div>
+                            ) : visibleRecords.length === 0 ? (
+                              <div className="text-center py-20 text-xs font-medium text-slate-500 space-y-2">
+                                <p>No records found.</p>
+                                <p className="text-[10px] text-slate-700 font-mono"></p>
+                              </div>
+                            ) : (
+                              <>
+                                {/* DESKTOP/TABLET: FULL DATA TABLE */}
+                                <div className="hidden md:block overflow-x-auto">
+                                  <table className="w-full text-left text-xs text-slate-400">
+                                    <thead className="text-[10px] text-slate-400 font-bold uppercase tracking-widest bg-slate-950 border-b border-slate-900/80">
+                                      <tr>
+                                        <th className="px-6 py-4">Record Title</th>
+                                        <th className="px-6 py-4">Storage IPFS Hash</th>
+                                        <th className="px-6 py-4">File Size</th>
+                                        <th className="px-6 py-4">Verification Status</th>
+                                        <th className="px-6 py-4 text-right">Actions</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-900/40 font-medium">
+                                      {visibleRecords.map((record) => (
+                                        <tr key={record._id || record.id} className="hover:bg-slate-900/30 transition-all group/row">
+                                          <td className="px-6 py-4 font-bold text-white max-w-[220px] truncate">
+                                            {record.title || "Untitled Fragment"}
+                                          </td>
+                                          <td className="px-6 py-4 font-mono text-teal-400 max-w-[260px] truncate relative">
+                                            <button
+                                              type="button"
+                                              onClick={() => handlePreviewRecord(record)}
+                                              className="hover:text-teal-300 inline-flex items-center gap-1.5 transition-colors text-left"
+                                              title="Decrypt and view record"
+                                            >
+                                              {record.ipfsHash || "Processing identity block..."}
+                                              <ExternalLink className="h-3 w-3 opacity-0 group-hover/row:opacity-100 transition-opacity text-slate-500 shrink-0" />
+                                            </button>
+                                          </td>
+                                          <td className="px-6 py-4 text-xs font-mono text-slate-500">
+                                            {record.fileSize || "0.00 MB"}
+                                          </td>
+                                          <td className="px-6 py-4">
+                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-teal-500/5 text-teal-400 border border-teal-500/10">
+                                              Verified Secure
+                                            </span>
+                                          </td>
+                                          <td className="px-6 py-4 text-right">
+                                            <div className="flex justify-end gap-2">
+                                              {(currentUser?.role === 'patient' || currentUser?.role === 'admin' || currentUser?.role === 'hospital_admin') && (
+                                                <button
+                                                  onClick={() => openShareModal(record)}
+                                                  className="px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-[11px] font-bold text-purple-400 hover:bg-purple-500 hover:text-slate-950 transition-all flex items-center gap-1.5"
+                                                >
+                                                  <UserCheck className="h-3.5 w-3.5" /> Share
+                                                </button>
+                                              )}
+                                              {currentUser?.role === 'doctor' && (
+                                                <button
+                                                  onClick={() => handlePreviewRecord(record)}
+                                                  className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] font-bold text-amber-400 hover:bg-amber-500 hover:text-slate-950 transition-all flex items-center gap-1.5"
+                                                >
+                                                  <FileCheck className="h-3.5 w-3.5" /> View & Remark
+                                                </button>
+                                              )}
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+
+                                {/* MOBILE: STACKED RECORD CARDS — NO HORIZONTAL SCROLL */}
+                                <div className="md:hidden divide-y divide-slate-900/40">
+                                  {visibleRecords.map((record) => (
+                                    <div key={record._id || record.id} className="p-4 space-y-3">
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0 flex-1">
+                                          <p className="font-bold text-white text-sm truncate">
+                                            {record.title || "Untitled Fragment"}
+                                          </p>
+                                          <button
+                                            type="button"
+                                            onClick={() => handlePreviewRecord(record)}
+                                            className="mt-1 text-teal-400 hover:text-teal-300 inline-flex items-center gap-1.5 transition-colors text-left max-w-full"
+                                            title="Decrypt and view record"
+                                          >
+                                            <span className="font-mono text-[11px] truncate">{record.ipfsHash || "Processing identity block..."}</span>
+                                            <ExternalLink className="h-3 w-3 shrink-0 text-slate-500" />
+                                          </button>
+                                        </div>
+                                        <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider bg-teal-500/5 text-teal-400 border border-teal-500/10">
+                                          Verified
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between gap-3">
+                                        <span className="text-[11px] font-mono text-slate-500">{record.fileSize || "0.00 MB"}</span>
+                                        <div className="flex gap-2">
+                                          {(currentUser?.role === 'patient' || currentUser?.role === 'admin' || currentUser?.role === 'hospital_admin') && (
+                                            <button
+                                              onClick={() => openShareModal(record)}
+                                              className="px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-[11px] font-bold text-purple-400 flex items-center gap-1.5"
+                                            >
+                                              <UserCheck className="h-3.5 w-3.5" /> Share
+                                            </button>
+                                          )}
+                                          {currentUser?.role === 'doctor' && (
+                                            <button
+                                              onClick={() => handlePreviewRecord(record)}
+                                              className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] font-bold text-amber-400 flex items-center gap-1.5"
+                                            >
+                                              <FileCheck className="h-3.5 w-3.5" /> View & Remark
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
                                     </div>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        )}
-                      </div>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
@@ -1823,7 +1932,7 @@ export default function PremiumDashboard() {
                           <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
                             Medical File Attachment
                           </label>
-                          <div className="relative border border-dashed border-slate-800 hover:border-teal-500/30 rounded-xl p-8 text-center transition-all bg-slate-950/40 group">
+                          <div className="relative border border-dashed border-slate-800 hover:border-teal-500/30 rounded-xl p-5 sm:p-8 text-center transition-all bg-slate-950/40 group">
                             <UploadCloud className="h-8 w-8 text-slate-600 group-hover:text-teal-400 mx-auto mb-2 transition-colors" />
                             <input
                               id="medical-file"
@@ -1886,7 +1995,7 @@ export default function PremiumDashboard() {
                   </div>
 
                   {/* Add New Doctor Section */}
-                  <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-6">
+                  <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-4 sm:p-6">
                     <h5 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
                       <UserPlus className="h-4 w-4 text-teal-400" /> Add a Doctor
                     </h5>
@@ -1916,14 +2025,14 @@ export default function PremiumDashboard() {
 
                   {/* Connected Doctors List */}
                   <div className="bg-slate-950/40 border border-slate-900 rounded-2xl overflow-hidden">
-                    <div className="p-5 border-b border-slate-900/80 bg-slate-950/60 flex justify-between items-center">
+                    <div className="p-4 sm:p-5 border-b border-slate-900/80 bg-slate-950/60 flex justify-between items-center">
                       <h3 className="text-sm font-bold text-white tracking-wide">Connected Doctors</h3>
                       <span className="px-2.5 py-1 rounded-md bg-teal-500/10 border border-teal-500/20 text-[10px] font-bold text-teal-400 uppercase tracking-widest">
                         {patientConnections.length} Connections
                       </span>
                     </div>
 
-                    <div className="p-5">
+                    <div className="p-3 sm:p-5">
                       {patientConnections.length === 0 ? (
                         <div className="text-center py-10 text-xs font-medium text-slate-500 bg-slate-900/20 rounded-xl border border-slate-800/50 border-dashed">
                           You have no active or pending clinical connections.
@@ -2124,61 +2233,91 @@ export default function PremiumDashboard() {
 
                   {/* AUDIT TABLE */}
                   <div className="bg-slate-950/40 border border-slate-900 rounded-2xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.4)]">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm text-left whitespace-nowrap">
-                        <thead className="text-[10px] text-slate-400 uppercase tracking-widest bg-slate-950/80 border-b border-slate-900">
-                          <tr>
-                            <th className="px-6 py-4 font-bold">Timestamp</th>
-                            <th className="px-6 py-4 font-bold">Event Type</th>
-                            <th className="px-6 py-4 font-bold">Actor</th>
-                            <th className="px-6 py-4 font-bold">Patient</th>
-                            <th className="px-6 py-4 font-bold">Record</th>
-                            <th className="px-6 py-4 font-bold">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-900/40">
-                          {isLoadingAudit ? (
-                            <tr>
-                              <td colSpan="6" className="p-8 text-center text-slate-500 text-sm">
-                                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-teal-500/30 border-t-teal-400 mr-2" />
-                                Syncing ledger logs...
-                              </td>
-                            </tr>
-                          ) : filteredAuditLogs.length === 0 ? (
-                            <tr>
-                              <td colSpan="6" className="p-8 text-center text-slate-500 text-sm">
-                                No audit logs match your filters.
-                              </td>
-                            </tr>
-                          ) : (
-                            filteredAuditLogs.map((log) => (
-                              <tr key={log._id} className="bg-slate-900/20 hover:bg-slate-900/50 transition-colors">
-                                <td className="px-6 py-4 text-xs font-mono text-slate-400">
-                                  {new Date(log.timestamp || log.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                                </td>
-                                <td className="px-6 py-4">
-                                  <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border ${log.color || 'bg-slate-800 text-slate-300 border-slate-700'}`}>
-                                    {log.type || 'System Event'}
-                                  </span>
-                                </td>
-                                <td className="px-6 py-4 font-medium text-white">
-                                  {log.actor || 'System'}
-                                </td>
-                                <td className="px-6 py-4 text-slate-300">
-                                  {log.patient || '—'}
-                                </td>
-                                <td className="px-6 py-4 font-mono text-[11px] text-slate-400">
-                                  {log.record || '—'}
-                                </td>
-                                <td className="px-6 py-4 text-slate-300 font-medium">
-                                  {log.action}
-                                </td>
+                    {isLoadingAudit ? (
+                      <div className="p-8 text-center text-slate-500 text-sm">
+                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-teal-500/30 border-t-teal-400 mr-2" />
+                        Syncing ledger logs...
+                      </div>
+                    ) : filteredAuditLogs.length === 0 ? (
+                      <div className="p-8 text-center text-slate-500 text-sm">
+                        No audit logs match your filters.
+                      </div>
+                    ) : (
+                      <>
+                        {/* DESKTOP/TABLET: FULL DATA TABLE */}
+                        <div className="hidden md:block overflow-x-auto">
+                          <table className="w-full text-sm text-left whitespace-nowrap">
+                            <thead className="text-[10px] text-slate-400 uppercase tracking-widest bg-slate-950/80 border-b border-slate-900">
+                              <tr>
+                                <th className="px-6 py-4 font-bold">Timestamp</th>
+                                <th className="px-6 py-4 font-bold">Event Type</th>
+                                <th className="px-6 py-4 font-bold">Actor</th>
+                                <th className="px-6 py-4 font-bold">Patient</th>
+                                <th className="px-6 py-4 font-bold">Record</th>
+                                <th className="px-6 py-4 font-bold">Action</th>
                               </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                            </thead>
+                            <tbody className="divide-y divide-slate-900/40">
+                              {filteredAuditLogs.map((log) => (
+                                <tr key={log._id} className="bg-slate-900/20 hover:bg-slate-900/50 transition-colors">
+                                  <td className="px-6 py-4 text-xs font-mono text-slate-400">
+                                    {new Date(log.timestamp || log.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border ${log.color || 'bg-slate-800 text-slate-300 border-slate-700'}`}>
+                                      {log.type || 'System Event'}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 font-medium text-white">
+                                    {log.actor || 'System'}
+                                  </td>
+                                  <td className="px-6 py-4 text-slate-300">
+                                    {log.patient || '—'}
+                                  </td>
+                                  <td className="px-6 py-4 font-mono text-[11px] text-slate-400">
+                                    {log.record || '—'}
+                                  </td>
+                                  <td className="px-6 py-4 text-slate-300 font-medium">
+                                    {log.action}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* MOBILE: STACKED LOG CARDS — NO HORIZONTAL SCROLL */}
+                        <div className="md:hidden divide-y divide-slate-900/40">
+                          {filteredAuditLogs.map((log) => (
+                            <div key={log._id} className="p-4 space-y-2.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border shrink-0 ${log.color || 'bg-slate-800 text-slate-300 border-slate-700'}`}>
+                                  {log.type || 'System Event'}
+                                </span>
+                                <span className="text-[10px] font-mono text-slate-500 shrink-0">
+                                  {new Date(log.timestamp || log.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                              <p className="text-sm font-medium text-white">{log.action}</p>
+                              <div className="grid grid-cols-3 gap-2 text-[11px]">
+                                <div className="min-w-0">
+                                  <span className="block text-slate-600 uppercase tracking-wide text-[9px] font-bold">Actor</span>
+                                  <span className="text-slate-300 truncate block">{log.actor || 'System'}</span>
+                                </div>
+                                <div className="min-w-0">
+                                  <span className="block text-slate-600 uppercase tracking-wide text-[9px] font-bold">Patient</span>
+                                  <span className="text-slate-300 truncate block">{log.patient || '—'}</span>
+                                </div>
+                                <div className="min-w-0">
+                                  <span className="block text-slate-600 uppercase tracking-wide text-[9px] font-bold">Record</span>
+                                  <span className="text-slate-400 font-mono truncate block">{log.record || '—'}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -2193,7 +2332,7 @@ export default function PremiumDashboard() {
                     </p>
                   </div>
 
-                  <div className="bg-slate-950/50 rounded-2xl p-6 border border-slate-900 shadow-[0_8px_30px_rgb(0,0,0,0.4)] space-y-4">
+                  <div className="bg-slate-950/50 rounded-2xl p-4 sm:p-6 border border-slate-900 shadow-[0_8px_30px_rgb(0,0,0,0.4)] space-y-4">
                     {/* Profile Header */}
                     <div className="flex items-center justify-between border-b border-slate-900 pb-5">
                       <div>

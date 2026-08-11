@@ -132,9 +132,14 @@ const loginUser = async (req, res) => {
     }
 
     // =========================================================================
-    // 🧪 THE SANDBOX WIPE: Reset the demo database if a demo user is logging in
+    // 🧪 THE SANDBOX WIPE: Reset the demo database when the demo PATIENT logs in
     // =========================================================================
-    if (user.isDemo) {
+    // Scoped to the patient specifically — Records are owned by the patient, so
+    // that's the only login that should reset them. Firing this on *any* demo
+    // role (as it did before) wiped a patient's uploads the instant someone
+    // logged into the demo doctor account to view what was just shared with
+    // them, breaking the normal patient -> doctor demo tour in one sitting.
+    if (user.isDemo && user.role === 'patient') {
       console.log(`🚨 INITIALIZING FRESH DEMO SANDBOX FOR: ${user.username}`);
       const DEMO_HOSPITAL_ID = '111111111111111111111111';
 
