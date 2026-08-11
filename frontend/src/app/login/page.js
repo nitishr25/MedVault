@@ -136,30 +136,33 @@ export default function LoginPage() {
     admin: { email: 'admin@demo.com', password: 'MedVaultDemo@2026' }
   };
 
+  // All three are demo-mode entry points, so all three use the same amber
+  // "this is demo" accent — amber/yellow is reserved exclusively for demo-related
+  // UI across the app, everything else uses the app's green.
   const demoRoles = [
     {
       key: 'patient',
       label: 'Patient',
       icon: User,
-      color: 'text-blue-300',
-      ring: 'border-blue-500/25 hover:border-blue-500/50',
-      glow: 'bg-blue-500/10 hover:bg-blue-500/15',
+      color: 'text-amber-300',
+      ring: 'border-amber-500/25 hover:border-amber-500/50',
+      glow: 'bg-amber-500/10 hover:bg-amber-500/15',
     },
     {
       key: 'doctor',
       label: 'Doctor',
       icon: Stethoscope,
-      color: 'text-emerald-300',
-      ring: 'border-emerald-500/25 hover:border-emerald-500/50',
-      glow: 'bg-emerald-500/10 hover:bg-emerald-500/15',
+      color: 'text-amber-300',
+      ring: 'border-amber-500/25 hover:border-amber-500/50',
+      glow: 'bg-amber-500/10 hover:bg-amber-500/15',
     },
     {
       key: 'admin',
       label: 'Hospital Admin',
       icon: Building2,
-      color: 'text-purple-300',
-      ring: 'border-purple-500/25 hover:border-purple-500/50',
-      glow: 'bg-purple-500/10 hover:bg-purple-500/15',
+      color: 'text-amber-300',
+      ring: 'border-amber-500/25 hover:border-amber-500/50',
+      glow: 'bg-amber-500/10 hover:bg-amber-500/15',
     },
   ];
 
