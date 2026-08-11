@@ -1,5 +1,4 @@
 'use client';
-import DemoBanner from '@/components/DemoBanner';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '../../lib/api';
@@ -40,7 +39,8 @@ import {
   Building2,
   Stethoscope,
   Menu,
-  X
+  X,
+  ChevronDown
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -71,6 +71,7 @@ export default function PremiumDashboard() {
 
   const [directoryDoctors, setDirectoryDoctors] = useState([]);
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
+  const [expandedHospitals, setExpandedHospitals] = useState({});
 
   // 1. Patient selection state for Doctor Roster
   const [activePatient, setActivePatient] = useState(null);
@@ -1015,9 +1016,16 @@ export default function PremiumDashboard() {
                   ? (currentUser?.username?.toLowerCase().startsWith('dr') ? currentUser?.username : `Dr. ${currentUser?.username}`)
                   : currentUser?.username}
               </h4>
-              <p className="text-[9px] text-teal-400 font-mono tracking-widest uppercase mt-0.5 bg-teal-500/5 border border-teal-500/10 rounded px-1.5 py-0.5 inline-block">
-                {currentUser?.role}
-              </p>
+              <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                <p className="text-[9px] text-teal-400 font-mono tracking-widest uppercase bg-teal-500/5 border border-teal-500/10 rounded px-1.5 py-0.5 inline-block">
+                  {currentUser?.role}
+                </p>
+                {isDemoUser && (
+                  <p className="text-[9px] text-amber-400 font-mono tracking-widest uppercase bg-amber-500/5 border border-amber-500/10 rounded px-1.5 py-0.5 inline-block">
+                    Demo
+                  </p>
+                )}
+              </div>
               {(currentUser?.role === 'doctor' || currentUser?.role === 'admin' || currentUser?.role === 'hospital_admin') && (
                 <p className="text-[10px] text-slate-500 truncate mt-1 font-medium">
                   {HOSPITAL_DIRECTORY[currentUser?.hospitalId] || 'Unassigned Hospital'}
@@ -1040,34 +1048,24 @@ export default function PremiumDashboard() {
       <div className="flex-1 flex flex-col relative z-10 overflow-y-auto">
 
         {/* INTERACTIVE WORKSPACE SUBHEADER */}
-        <header className="min-h-20 border-b border-slate-900/60 px-4 sm:px-8 py-3 flex flex-wrap items-center justify-between gap-3 bg-slate-950/20 backdrop-blur-xl shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
+        <header className="h-16 sm:h-20 border-b border-slate-900/60 px-3 sm:px-8 py-2 sm:py-3 flex items-center justify-between gap-2 sm:gap-3 bg-slate-950/20 backdrop-blur-xl shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             <button
               type="button"
               onClick={() => setIsSidebarOpen(true)}
-              className="lg:hidden p-2 -ml-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors shrink-0"
+              className="lg:hidden p-2 -ml-1 sm:-ml-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors shrink-0"
               aria-label="Open menu"
             >
               <Menu className="h-5 w-5" />
             </button>
             <div className="min-w-0">
-              <h2 className="text-sm font-bold tracking-wide text-white truncate">MedVault Management Dashboard</h2>
+              <h2 className="text-xs sm:text-sm font-bold tracking-wide text-white truncate">MedVault Dashboard</h2>
               <p className="text-xs text-slate-500 font-medium mt-0.5 truncate hidden lg:block">Secure, decentralized cross-origin framework nodes reporting stable.</p>
             </div>
           </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <DemoBanner user={currentUser} />
-            <button
-              type="button"
-              onClick={fetchLiveRecords}
-              disabled={isLoading}
-              className="p-2 border border-slate-900 rounded-xl bg-slate-900/40 text-slate-400 hover:text-white hover:bg-slate-900 transition-all disabled:opacity-40 shrink-0"
-              title="Force Sync Index Ledger"
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            </button>
-            <div className="flex items-center gap-2 bg-emerald-500/5 border border-emerald-500/10 rounded-xl px-4 py-1.5 text-[11px] font-bold tracking-wide text-emerald-400 shadow-sm shadow-emerald-950/10 whitespace-nowrap shrink-0">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 bg-emerald-500/5 border border-emerald-500/10 rounded-lg sm:rounded-xl px-2.5 sm:px-4 py-1 sm:py-1.5 text-[9px] sm:text-[11px] font-bold tracking-wide text-emerald-400 shadow-sm shadow-emerald-950/10 whitespace-nowrap shrink-0">
+              <span className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
               <span className="hidden sm:inline">IPFS Gateway Connected</span>
               <span className="sm:hidden">IPFS</span>
             </div>
@@ -1077,23 +1075,23 @@ export default function PremiumDashboard() {
         <main className="p-4 sm:p-6 lg:p-8 max-w-6xl w-full mx-auto space-y-5 sm:space-y-8 flex-1">
 
           {/* TELEMETRY METRIC SECTION CARDS MATRIX */}
-          <section className="grid grid-cols-3 gap-2.5 sm:gap-5">
-            <div className="bg-slate-900/20 backdrop-blur-2xl border border-slate-900 p-3 sm:p-5 rounded-xl sm:rounded-2xl relative overflow-hidden group">
+          <section className="grid grid-cols-3 gap-2 sm:gap-5">
+            <div className="bg-slate-900/20 backdrop-blur-2xl border border-slate-900 p-2 sm:p-5 rounded-lg sm:rounded-2xl relative overflow-hidden group">
               <div className="absolute top-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-teal-500/20 to-transparent group-hover:via-teal-500/40 transition-all duration-700" />
-              <div className="flex items-center justify-between mb-1.5 sm:mb-3">
-                <span className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Encryption</span>
-                <Activity className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-teal-400 shrink-0 ml-1" />
+              <div className="flex items-center justify-between mb-1 sm:mb-3">
+                <span className="text-[8px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Encryption</span>
+                <Activity className="h-3 w-3 sm:h-4 sm:w-4 text-teal-400 shrink-0 ml-1" />
               </div>
-              <h3 className="text-base sm:text-2xl font-black text-white tracking-tight">Active</h3>
+              <h3 className="text-xs sm:text-2xl font-black text-white tracking-tight">Active</h3>
             </div>
 
-            <div className="bg-slate-900/20 backdrop-blur-2xl border border-slate-900 p-3 sm:p-5 rounded-xl sm:rounded-2xl relative overflow-hidden group">
+            <div className="bg-slate-900/20 backdrop-blur-2xl border border-slate-900 p-2 sm:p-5 rounded-lg sm:rounded-2xl relative overflow-hidden group">
               <div className="absolute top-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-sky-500/20 to-transparent group-hover:via-sky-500/40 transition-all duration-700" />
-              <div className="flex items-center justify-between mb-1.5 sm:mb-3">
-                <span className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Records</span>
-                <Database className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-sky-400 shrink-0 ml-1" />
+              <div className="flex items-center justify-between mb-1 sm:mb-3">
+                <span className="text-[8px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Records</span>
+                <Database className="h-3 w-3 sm:h-4 sm:w-4 text-sky-400 shrink-0 ml-1" />
               </div>
-              <h3 className="text-base sm:text-2xl font-black text-white tracking-tight font-mono">
+              <h3 className="text-xs sm:text-2xl font-black text-white tracking-tight font-mono">
                 {isLoading ? "SYNC" : String(
                   (currentUser?.role === 'admin' || currentUser?.role === 'hospital_admin')
                     ? (adminTelemetry?.totalRecords || 0)
@@ -1102,13 +1100,13 @@ export default function PremiumDashboard() {
               </h3>
             </div>
 
-            <div className="bg-slate-900/20 backdrop-blur-2xl border border-slate-900 p-3 sm:p-5 rounded-xl sm:rounded-2xl relative overflow-hidden group">
+            <div className="bg-slate-900/20 backdrop-blur-2xl border border-slate-900 p-2 sm:p-5 rounded-lg sm:rounded-2xl relative overflow-hidden group">
               <div className="absolute top-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-purple-500/20 to-transparent group-hover:via-purple-500/40 transition-all duration-700" />
-              <div className="flex items-center justify-between mb-1.5 sm:mb-3">
-                <span className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Role</span>
-                <UserCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-400 shrink-0 ml-1" />
+              <div className="flex items-center justify-between mb-1 sm:mb-3">
+                <span className="text-[8px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Role</span>
+                <UserCheck className="h-3 w-3 sm:h-4 sm:w-4 text-purple-400 shrink-0 ml-1" />
               </div>
-              <h3 className="text-base sm:text-2xl font-black text-white tracking-tight capitalize truncate">{currentUser?.role}</h3>
+              <h3 className="text-xs sm:text-2xl font-black text-white tracking-tight capitalize truncate">{currentUser?.role}</h3>
             </div>
           </section>
 
@@ -1146,89 +1144,76 @@ export default function PremiumDashboard() {
                   </div>
 
                   {/* LIVE DATABASE-DRIVEN METRIC COUNTERS */}
-                  <div className="w-full grid grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4 mb-4 sm:mb-6">
+                  <div className="w-full grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6">
                     {currentUser?.role === 'doctor' ? (
                       <>
                         {/* DOCTOR CARD 1: PATIENTS GRANTED ACCESS */}
-                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center justify-between group overflow-hidden">
-                          <div className="space-y-1 min-w-0">
-                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Patients Access</span>
-                            <span className="text-base sm:text-xl font-black text-white block tracking-tight">
+                        <div className="w-full min-w-0 bg-slate-950/40 border border-slate-900 rounded-lg sm:rounded-2xl p-2 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0 group overflow-hidden">
+                          <div className="min-w-0 order-2 sm:order-1">
+                            <span className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Patients</span>
+                            <span className="text-sm sm:text-xl font-black text-white block tracking-tight">
                               {patientRoster.length}
                             </span>
                           </div>
-                          <div className="h-9 w-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
-                            <UserCheck className="h-4 w-4" />
+                          <div className="h-6 w-6 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 order-1 sm:order-2">
+                            <UserCheck className="h-3 w-3 sm:h-4 sm:w-4" />
                           </div>
                         </div>
 
                         {/* DOCTOR CARD 2: PENDING INBOUND REQUESTS */}
-                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center justify-between group overflow-hidden">
-                          <div className="space-y-1 min-w-0">
-                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Pending Inbound</span>
-                            <span className="text-base sm:text-xl font-black text-amber-400 block tracking-tight">
+                        <div className="w-full min-w-0 bg-slate-950/40 border border-slate-900 rounded-lg sm:rounded-2xl p-2 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0 group overflow-hidden">
+                          <div className="min-w-0 order-2 sm:order-1">
+                            <span className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Pending</span>
+                            <span className="text-sm sm:text-xl font-black text-white block tracking-tight">
                               {dashboardStats?.pendingRequests?.length || 0}
                             </span>
                           </div>
-                          <div className="h-9 w-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
-                            <UserPlus className="h-4 w-4" />
+                          <div className="h-6 w-6 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0 order-1 sm:order-2">
+                            <UserPlus className="h-3 w-3 sm:h-4 sm:w-4" />
                           </div>
                         </div>
                       </>
                     ) : (currentUser?.role === 'admin' || currentUser?.role === 'hospital_admin') ? (
                       <>
                         {/* ADMIN CARD 1: AUDIT TRAIL SUMMARY */}
-                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center justify-between group overflow-hidden">
-                          <div className="space-y-1 min-w-0">
-                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Audit Trail</span>
-                            <span className="text-base sm:text-xl font-black text-indigo-400 block tracking-tight">
+                        <div className="w-full min-w-0 bg-slate-950/40 border border-slate-900 rounded-lg sm:rounded-2xl p-2 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0 group overflow-hidden">
+                          <div className="min-w-0 order-2 sm:order-1">
+                            <span className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Audit</span>
+                            <span className="text-sm sm:text-xl font-black text-white block tracking-tight">
                               Active
                             </span>
                           </div>
-                          <div className="h-9 w-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
-                            <Activity className="h-4 w-4" />
+                          <div className="h-6 w-6 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0 order-1 sm:order-2">
+                            <Activity className="h-3 w-3 sm:h-4 sm:w-4" />
                           </div>
                         </div>
 
                         {/* ADMIN CARD 2: NODE HEALTH */}
-                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center justify-between group overflow-hidden">
-                          <div className="space-y-1 min-w-0">
-                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Node Health</span>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                              </span>
-                              <span className="text-base sm:text-xl font-black text-white block tracking-tight">
-                                Connected
-                              </span>
-                            </div>
+                        <div className="w-full min-w-0 bg-slate-950/40 border border-slate-900 rounded-lg sm:rounded-2xl p-2 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0 group overflow-hidden">
+                          <div className="min-w-0 order-2 sm:order-1">
+                            <span className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Node</span>
+                            <span className="text-sm sm:text-xl font-black text-white block tracking-tight truncate">
+                              Connected
+                            </span>
                           </div>
-                          <div className="h-9 w-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                            <Server className="h-4 w-4" />
+                          <div className="h-6 w-6 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0 order-1 sm:order-2">
+                            <Server className="h-3 w-3 sm:h-4 sm:w-4" />
                           </div>
                         </div>
 
                         {/* HOSPITAL NETWORK SCALE */}
-                        <div className="col-span-2 lg:col-span-1 bg-slate-900/50 border border-slate-800 rounded-xl sm:rounded-2xl p-3 sm:p-6 flex flex-col justify-center">
-                          <div className="flex items-center justify-between mb-2 sm:mb-4">
-                            <p className="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider truncate">Hospital Network</p>
-                            <div className="p-1.5 sm:p-2 bg-blue-500/10 rounded-lg shrink-0 ml-1">
-                              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500" />
-                            </div>
-                          </div>
-
-                          <div className="flex space-x-6">
-                            <div>
-                              <p className="text-[10px] sm:text-xs text-slate-400 mb-1 uppercase tracking-wider">Patients</p>
-                              <h3 className="text-lg sm:text-2xl font-bold text-white">
+                        <div className="w-full min-w-0 bg-slate-900/50 border border-slate-800 rounded-lg sm:rounded-2xl p-2 sm:p-6 flex flex-col justify-center overflow-hidden">
+                          <span className="text-[8px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider truncate block mb-1 sm:mb-4">Network</span>
+                          <div className="flex gap-3 sm:gap-6">
+                            <div className="min-w-0">
+                              <p className="text-[8px] sm:text-xs text-slate-400 mb-0.5 sm:mb-1 uppercase tracking-wider truncate">Patients</p>
+                              <h3 className="text-sm sm:text-2xl font-bold text-white">
                                 {adminTelemetry?.totalPatients || 0}
                               </h3>
                             </div>
-                            <div className="w-px bg-slate-800"></div>
-                            <div>
-                              <p className="text-[10px] sm:text-xs text-slate-400 mb-1 uppercase tracking-wider">Doctors</p>
-                              <h3 className="text-lg sm:text-2xl font-bold text-teal-400">
+                            <div className="min-w-0">
+                              <p className="text-[8px] sm:text-xs text-slate-400 mb-0.5 sm:mb-1 uppercase tracking-wider truncate">Doctors</p>
+                              <h3 className="text-sm sm:text-2xl font-bold text-white">
                                 {adminTelemetry?.totalDoctors || 0}
                               </h3>
                             </div>
@@ -1238,41 +1223,41 @@ export default function PremiumDashboard() {
                     ) : (
                       <>
                         {/* PATIENT CARD 1: TOTAL RECORDS */}
-                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center justify-between group overflow-hidden">
-                          <div className="space-y-1 min-w-0">
-                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Total Records</span>
-                            <span className="text-base sm:text-xl font-black text-white block tracking-tight">
+                        <div className="w-full min-w-0 bg-slate-950/40 border border-slate-900 rounded-lg sm:rounded-2xl p-2 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0 group overflow-hidden">
+                          <div className="min-w-0 order-2 sm:order-1">
+                            <span className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Records</span>
+                            <span className="text-sm sm:text-xl font-black text-white block tracking-tight">
                               {dashboardStats?.totalRecords ?? dbRecords.length}
                             </span>
                           </div>
-                          <div className="h-9 w-9 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 shrink-0">
-                            <FolderPlus className="h-4 w-4" />
+                          <div className="h-6 w-6 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 shrink-0 order-1 sm:order-2">
+                            <FolderPlus className="h-3 w-3 sm:h-4 sm:w-4" />
                           </div>
                         </div>
 
                         {/* PATIENT CARD 2: STORAGE FOOTPRINTS */}
-                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center justify-between group overflow-hidden">
-                          <div className="space-y-1 min-w-0">
-                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Storage Allocated</span>
-                            <span className="text-base sm:text-xl font-black text-emerald-400 block tracking-tight">
+                        <div className="w-full min-w-0 bg-slate-950/40 border border-slate-900 rounded-lg sm:rounded-2xl p-2 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0 group overflow-hidden">
+                          <div className="min-w-0 order-2 sm:order-1">
+                            <span className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Storage</span>
+                            <span className="text-sm sm:text-xl font-black text-white block tracking-tight truncate">
                               {dashboardStats?.totalStorage || '0.00 MB'}
                             </span>
                           </div>
-                          <div className="h-9 w-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                            <HardDrive className="h-4 w-4" />
+                          <div className="h-6 w-6 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0 order-1 sm:order-2">
+                            <HardDrive className="h-3 w-3 sm:h-4 sm:w-4" />
                           </div>
                         </div>
 
                         {/* PATIENT CARD 3: ACTIVE DOCTORS */}
-                        <div className="w-full bg-slate-950/40 border border-slate-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center justify-between group overflow-hidden">
-                          <div className="space-y-1 min-w-0">
-                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Active Doctors</span>
-                            <span className="text-base sm:text-xl font-black text-amber-400 block tracking-tight">
-                              {patientConnections.filter(c => c.status === 'active').length} Connected
+                        <div className="w-full min-w-0 bg-slate-950/40 border border-slate-900 rounded-lg sm:rounded-2xl p-2 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-0 group overflow-hidden">
+                          <div className="min-w-0 order-2 sm:order-1">
+                            <span className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-wider block truncate">Doctors</span>
+                            <span className="text-sm sm:text-xl font-black text-white block tracking-tight">
+                              {patientConnections.filter(c => c.status === 'active').length}
                             </span>
                           </div>
-                          <div className="h-9 w-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
-                            <UserCheck className="h-4 w-4" />
+                          <div className="h-6 w-6 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0 order-1 sm:order-2">
+                            <UserCheck className="h-3 w-3 sm:h-4 sm:w-4" />
                           </div>
                         </div>
                       </>
@@ -2117,61 +2102,72 @@ export default function PremiumDashboard() {
                             acc[hospitalName].push(doctor);
                             return acc;
                           }, {})
-                        ).map(([hospital, doctors]) => (
-                          <div key={hospital} className="space-y-4 bg-slate-950/30 p-4 rounded-2xl border border-slate-900/50">
+                        ).map(([hospital, doctors]) => {
+                          const isOpen = !!expandedHospitals[hospital];
+                          return (
+                            <div key={hospital} className="space-y-3 bg-slate-950/30 p-3 sm:p-4 rounded-2xl border border-slate-900/50">
 
-                            {/* Hospital Header Segment */}
-                            <div className="flex items-center justify-between pb-2 border-b border-slate-800/50">
-                              <div className="flex items-center gap-3">
-                                <div className="h-7 w-7 rounded-lg bg-teal-500/10 border border-teal-500/20 flex items-center justify-center shadow-[0_0_10px_rgba(20,184,166,0.1)]">
-                                  <Building2 className="h-4 w-4 text-teal-400" />
-                                </div>
-                                <h3 className="text-xs font-black text-white tracking-wider uppercase">
-                                  {hospital}
-                                </h3>
-                              </div>
-                              <div className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                                {doctors.length} Specialist{doctors.length !== 1 ? 's' : ''}
-                              </div>
-                            </div>
-
-                            {/* Doctors Grid for this Hospital */}
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                              {doctors.map((doc, idx) => (
-                                <div
-                                  key={idx}
-                                  className="bg-slate-900/40 border border-slate-800 rounded-xl p-4 hover:bg-slate-800/80 hover:border-teal-500/40 transition-all group relative overflow-hidden flex items-center justify-between"
-                                >
-                                  <div className="flex items-center gap-3">
-                                    {/* NEW STETHOSCOPE ICON */}
-                                    <div className="h-10 w-10 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-500 group-hover:text-teal-400 group-hover:border-teal-500/50 transition-colors shrink-0">
-                                      <Stethoscope className="h-5 w-5" />
-                                    </div>
-                                    <div>
-                                      <h4 className="text-white font-bold text-sm">
-                                        {doc.username?.toLowerCase().startsWith('dr') ? doc.username : `Dr. ${doc.username}`}
-                                      </h4>
-                                      <span className="text-[9px] font-bold uppercase tracking-widest text-teal-400/70 bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/20 mt-1 inline-block">
-                                        {doc.specialty || 'General'}
-                                      </span>
-                                    </div>
+                              {/* Hospital Header Segment — every hospital collapses the same way, regardless of doctor count */}
+                              <button
+                                type="button"
+                                onClick={() => setExpandedHospitals(prev => ({ ...prev, [hospital]: !prev[hospital] }))}
+                                className="w-full flex items-center justify-between gap-2 pb-2 border-b border-slate-800/50 cursor-pointer"
+                              >
+                                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                                  <div className="h-6 w-6 sm:h-7 sm:w-7 rounded-lg bg-teal-500/10 border border-teal-500/20 flex items-center justify-center shadow-[0_0_10px_rgba(20,184,166,0.1)] shrink-0">
+                                    <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-teal-400" />
                                   </div>
-
-                                  <button
-                                    onClick={() => {
-                                      triggerToast(`Copied Node Address!`);
-                                      navigator.clipboard.writeText(doc.email);
-                                    }}
-                                    className="h-8 px-3 rounded-lg bg-slate-950 border border-slate-800 text-[10px] font-bold text-slate-400 hover:text-teal-400 hover:border-teal-500/30 transition-all shrink-0"
-                                  >
-                                    Copy Node
-                                  </button>
+                                  <h3 className="text-[11px] sm:text-xs font-black text-white tracking-wider uppercase truncate text-left">
+                                    {hospital}
+                                  </h3>
                                 </div>
-                              ))}
-                            </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <div className="px-2 py-1 rounded-md bg-slate-900 border border-slate-800 text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase tracking-widest whitespace-nowrap">
+                                    {doctors.length} Specialist{doctors.length !== 1 ? 's' : ''}
+                                  </div>
+                                  <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
+                                </div>
+                              </button>
 
-                          </div>
-                        ))}
+                              {/* Doctors Grid for this Hospital */}
+                              {isOpen && (
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+                                  {doctors.map((doc, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="bg-slate-900/40 border border-slate-800 rounded-xl p-2.5 sm:p-3 hover:bg-slate-800/80 hover:border-teal-500/40 transition-all group relative overflow-hidden flex items-center justify-between gap-2"
+                                    >
+                                      <div className="flex items-center gap-2.5 min-w-0">
+                                        <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-500 group-hover:text-teal-400 group-hover:border-teal-500/50 transition-colors shrink-0">
+                                          <Stethoscope className="h-4 w-4" />
+                                        </div>
+                                        <div className="min-w-0">
+                                          <h4 className="text-white font-bold text-xs sm:text-sm truncate">
+                                            {doc.username?.toLowerCase().startsWith('dr') ? doc.username : `Dr. ${doc.username}`}
+                                          </h4>
+                                          <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest text-teal-400/70 bg-teal-500/10 px-1.5 py-0.5 rounded border border-teal-500/20 mt-1 inline-block truncate max-w-full">
+                                            {doc.specialty || 'General'}
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      <button
+                                        onClick={() => {
+                                          triggerToast(`Copied Node Address!`);
+                                          navigator.clipboard.writeText(doc.email);
+                                        }}
+                                        className="h-7 px-2 sm:px-3 rounded-lg bg-slate-950 border border-slate-800 text-[9px] sm:text-[10px] font-bold text-slate-400 hover:text-teal-400 hover:border-teal-500/30 transition-all shrink-0 whitespace-nowrap"
+                                      >
+                                        Copy
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                            </div>
+                          );
+                        })}
                         {directoryDoctors.length === 0 && (
                           <div className="text-center py-8 text-slate-500 text-sm font-medium border border-dashed border-slate-800 rounded-xl bg-slate-900/20">
                             No external nodes detected in the public ledger yet.
