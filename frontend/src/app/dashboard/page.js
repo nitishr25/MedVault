@@ -2012,7 +2012,7 @@ export default function PremiumDashboard() {
                   <div className="bg-slate-950/40 border border-slate-900 rounded-2xl overflow-hidden">
                     <div className="p-4 sm:p-5 border-b border-slate-900/80 bg-slate-950/60 flex justify-between items-center">
                       <h3 className="text-sm font-bold text-white tracking-wide">Connected Doctors</h3>
-                      <span className="px-2.5 py-1 rounded-md bg-teal-500/10 border border-teal-500/20 text-[10px] font-bold text-teal-400 uppercase tracking-widest">
+                      <span className="px-2 py-0.5 rounded-md bg-teal-500/10 border border-teal-500/20 text-[9px] font-bold text-teal-400 uppercase tracking-widest whitespace-nowrap">
                         {patientConnections.length} Connections
                       </span>
                     </div>
@@ -2037,23 +2037,26 @@ export default function PremiumDashboard() {
                                 }`}>
                                 <UserCheck className="h-5 w-5" />
                               </div>
-                              <div className="flex-1 min-w-0">
-                                <h4 className="text-sm font-bold text-white truncate capitalize">
-                                  {conn.doctorId?.username
-                                    ? (conn.doctorId.username.toLowerCase().startsWith('dr') ? conn.doctorId.username : `Dr. ${conn.doctorId.username}`)
-                                    : 'Unknown Operator'
-                                  }
-                                </h4>
-                                <p className="text-[10px] font-mono text-slate-500 truncate mt-0.5">{conn.doctorId?.email}</p>
-                                <div className="flex items-center gap-2 mt-2">
-                                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${conn.status === 'active'
+                              <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <h4 className="text-sm font-bold text-white truncate capitalize">
+                                    {conn.doctorId?.username
+                                      ? (conn.doctorId.username.toLowerCase().startsWith('dr') ? conn.doctorId.username : `Dr. ${conn.doctorId.username}`)
+                                      : 'Unknown Operator'
+                                    }
+                                  </h4>
+                                  <p className="text-[10px] text-slate-400 truncate mt-0.5">{conn.doctorId?.specialty || 'General Practice'}</p>
+                                  <p className="text-[10px] font-mono text-slate-500 truncate mt-0.5">{conn.doctorId?.email}</p>
+                                </div>
+                                <div className="flex flex-col items-end gap-1 shrink-0 max-w-[38%] sm:max-w-[45%]">
+                                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border whitespace-nowrap ${conn.status === 'active'
                                     ? 'bg-teal-500/5 text-teal-400 border-teal-500/10'
                                     : 'bg-amber-500/5 text-amber-400 border-amber-500/10'
                                     }`}>
                                     {conn.status}
                                   </span>
-                                  <span className="text-[10px] text-slate-500 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                                    {conn.doctorId?.specialty || 'General Practice'} • {
+                                  <span className="text-[10px] text-slate-500 text-right truncate w-full">
+                                    {
                                       HOSPITAL_DIRECTORY[conn.doctorId?.hospitalId] ||
                                       conn.doctorId?.hospitalId ||
                                       HOSPITAL_DIRECTORY[conn.doctorId?.hospital] ||
