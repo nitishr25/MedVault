@@ -26,6 +26,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [demoLoadingRole, setDemoLoadingRole] = useState(null);
+  const [loadingHint, setLoadingHint] = useState('');
 
   // PREMIUM TOAST STATE MANAGEMENT
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -37,6 +38,46 @@ export default function LoginPage() {
     }, 4500);
   };
 
+  // 🐢 COLD-START RESILIENCE: the backend host spins down after inactivity, so the
+  // *first* request after a quiet period can legitimately take 20-40s to respond —
+  // nothing is broken, but a bare spinner reads as "frozen" and a 15s timeout reads
+  // as "the site is down." Neither is true. This escalates through honest status
+  // copy and retries with longer patience instead of failing outright on attempt one.
+  const COLD_START_STAGES = [
+    { atMs: 0, text: 'Verifying credentials…' },
+    { atMs: 3500, text: 'Establishing secure connection…' },
+    { atMs: 8000, text: 'The secure node is waking up from idle — this can take up to 30s on the first login…' },
+    { atMs: 20000, text: 'Still working on it, almost there…' },
+  ];
+
+  const loginWithRetry = async (path, payload) => {
+    const attemptTimeouts = [12000, 25000, 40000];
+    let lastError;
+
+    for (let attempt = 0; attempt < attemptTimeouts.length; attempt++) {
+      const stageTimers = COLD_START_STAGES.map(stage =>
+        setTimeout(() => setLoadingHint(stage.text), stage.atMs)
+      );
+      if (attempt > 0) {
+        setLoadingHint(`Still connecting — retrying (attempt ${attempt + 1} of ${attemptTimeouts.length})…`);
+      }
+
+      try {
+        const res = await api.post(path, payload, { timeout: attemptTimeouts[attempt] });
+        stageTimers.forEach(clearTimeout);
+        return res;
+      } catch (err) {
+        stageTimers.forEach(clearTimeout);
+        lastError = err;
+        // A real answer from the server (wrong password, validation, etc.) means
+        // retrying won't help — only retry on timeouts / no-response network errors.
+        const isRetryable = !err.response || err.code === 'ECONNABORTED' || err.response.status >= 500;
+        if (!isRetryable) throw err;
+      }
+    }
+    throw lastError;
+  };
+
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     if (!email.trim() || !password) {
@@ -45,11 +86,12 @@ export default function LoginPage() {
     }
 
     setIsLoading(true);
+    setLoadingHint('Verifying credentials…');
     try {
       // Clean and lowercase credentials before flight to prevent auth schema rejections
       const processedEmail = email.trim().toLowerCase();
 
-      const res = await api.post('/auth/login', {
+      const res = await loginWithRetry('/auth/login', {
         email: processedEmail,
         password: password
       });
@@ -74,11 +116,14 @@ export default function LoginPage() {
       }
     } catch (err) {
       // Capture 401s and validation blocks gracefully within the UI without breaking the call stack
-      const errorMessage = err.response?.data?.message || 'Authorization credentials rejected.';
+      const errorMessage = err.code === 'ECONNABORTED'
+        ? 'The server is taking longer than usual to respond. Please try again in a moment.'
+        : (err.response?.data?.message || 'Authorization credentials rejected.');
       triggerToast(errorMessage, 'error');
       console.error("❌ Auth terminal Handshake mismatch details:", err);
     } finally {
       setIsLoading(false);
+      setLoadingHint('');
     }
   };
 
@@ -120,10 +165,11 @@ export default function LoginPage() {
 
   const handleDemoLogin = async (role) => {
     setDemoLoadingRole(role);
+    setLoadingHint('Verifying credentials…');
     try {
       // Reuses the same authenticated `api` client (correct base URL + credentials)
       // as the real login form above, instead of a hardcoded localhost fetch.
-      const res = await api.post('/auth/login', demoCredentials[role]);
+      const res = await loginWithRetry('/auth/login', demoCredentials[role]);
 
       if (res.data?.token) {
         localStorage.setItem('token', res.data.token);
@@ -138,11 +184,14 @@ export default function LoginPage() {
         triggerToast('Demo login failed. Please try again.', 'error');
       }
     } catch (err) {
-      const errorMessage = err.response?.data?.message || 'Could not reach the demo sandbox. Please try again shortly.';
+      const errorMessage = err.code === 'ECONNABORTED'
+        ? 'The demo server is taking longer than usual to wake up. Please try again in a moment.'
+        : (err.response?.data?.message || 'Could not reach the demo sandbox. Please try again shortly.');
       triggerToast(errorMessage, 'error');
       console.error('❌ Demo login error:', err);
     } finally {
       setDemoLoadingRole(null);
+      setLoadingHint('');
     }
   };
 
@@ -253,7 +302,7 @@ export default function LoginPage() {
             {isLoading ? (
               <span className="flex items-center gap-2">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950/30 border-t-slate-950" />
-                Validating Network Token...
+                Signing In...
               </span>
             ) : (
               <span className="flex items-center justify-center gap-1.5">
@@ -261,6 +310,13 @@ export default function LoginPage() {
               </span>
             )}
           </button>
+
+          {/* HONEST COLD-START STATUS LINE — explains a slow first request instead of looking frozen */}
+          {isLoading && loadingHint && (
+            <p className="text-center text-[11px] text-teal-400/80 font-medium leading-relaxed animate-in fade-in duration-300 -mt-1">
+              {loadingHint}
+            </p>
+          )}
 
           {/* INTERACTIVE SIGN UP LINK ROUTER */}
           <div className="text-center pt-2">
@@ -309,6 +365,13 @@ export default function LoginPage() {
               );
             })}
           </div>
+
+          {/* HONEST COLD-START STATUS LINE for demo logins too */}
+          {demoLoadingRole !== null && loadingHint && (
+            <p className="text-center text-[11px] text-teal-400/80 font-medium leading-relaxed mt-3 animate-in fade-in duration-300">
+              {loadingHint}
+            </p>
+          )}
         </div>
       </div>
 
