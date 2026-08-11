@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
 import cookieParser from 'cookie-parser';
+import compression from 'compression';
 
 // CRITICAL FIX: Modern ES Module imports for your custom routes
 import authRoutes from './routes/authRoutes.js';
@@ -10,31 +11,77 @@ import recordRoutes from './routes/recordRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import connectionRoutes from './routes/connectionRoutes.js';
 
+// ==========================================
+// 🧯 0. PROCESS-LEVEL CRASH RESILIENCE
+// ==========================================
+// Without these, one unhandled rejection anywhere (a missed .catch on a
+// background task, a timer callback, etc.) takes down the entire process —
+// every in-flight request included — with nothing but a stack trace in a
+// log nobody's watching. Log loudly and exit so the process supervisor
+// (nodemon/pm2/host) restarts cleanly, instead of the process either dying
+// silently or limping on in undefined state.
+process.on('unhandledRejection', (reason) => {
+  console.error('[UNHANDLED REJECTION]', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[UNCAUGHT EXCEPTION] — process will restart:', err);
+  process.exit(1);
+});
+
 const app = express();
 
 // ==========================================
 // 🗄️ 1. DATABASE CONFIGURATION & LIFECYCLE
 // ==========================================
-// Forces Mongoose to ignore stale or corrupted index rules on your Atlas cluster
-mongoose.set('autoIndex', false); 
+// autoIndex only applies indexes declared in the schema at *connection* time —
+// with it off, any index added to a model later never gets created in
+// production and nobody notices until queries are silently doing full
+// collection scans. syncIndexes() below is the explicit, deploy-time
+// equivalent: it runs once on boot instead of on every write.
+mongoose.set('autoIndex', false);
 
 // Fallback logic check for MONGODB_URI or local fallback parameters
 const MONGO_URI = process.env.MONGODB_URI || process.env.MONGOOB_URI || 'mongodb://127.0.0.1:27017/medvault';
 
+let isDbReady = false;
+
 mongoose.connect(MONGO_URI)
-  .then((conn) => {
+  .then(async (conn) => {
     console.log(`[Database] MongoDB Connected Securely: ${conn.connection.host}`);
+    isDbReady = true;
+    try {
+      await Promise.all(
+        Object.values(mongoose.connection.models).map((model) => model.syncIndexes())
+      );
+      console.log('[Database] Indexes synced for all models.');
+    } catch (indexErr) {
+      console.error('[Database] Index sync failed:', indexErr.message);
+    }
   })
   .catch((err) => {
+    // Previously the server started accepting traffic regardless of this
+    // failure — every request would then fail with an opaque Mongoose
+    // "buffering timed out" error instead of a clear signal the DB never
+    // connected in the first place.
     console.error(`[Database Error] Connection Failed: ${err.message}`);
   });
+
+mongoose.connection.on('disconnected', () => {
+  isDbReady = false;
+  console.error('[Database] Connection lost — Mongoose will attempt to reconnect.');
+});
+mongoose.connection.on('reconnected', () => {
+  isDbReady = true;
+  console.log('[Database] Reconnected.');
+});
 
 // ==========================================
 // 🛡️ 2. GLOBAL ARCHITECTURE MIDDLEWARE LAYERS
 // ==========================================
+app.use(compression()); // gzip all responses — cheap, direct win on transfer size/TTFB
 // Grouped and ordered all inbound data payload structural parsers sequentially
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));   
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // Optimized CORS configuration gateway to clear preflight handshakes
@@ -49,9 +96,15 @@ app.use(cors({
 // 🩺 3. BASE API HEALTHCHECK DIAGNOSTIC ROUTE
 // ==========================================
 app.get('/api/v1/health', (req, res) => {
-  res.status(200).json({
-    status: 'success',
-    message: 'MedVault Cryptographic Engine Operating Normally',
+  // Reports actual DB readiness instead of just "the process is running" —
+  // a process can be up while Mongo is unreachable, and a health check that
+  // can't tell the difference is worse than no health check at all.
+  res.status(isDbReady ? 200 : 503).json({
+    status: isDbReady ? 'success' : 'degraded',
+    message: isDbReady
+      ? 'MedVault Cryptographic Engine Operating Normally'
+      : 'Database connection not yet established.',
+    dbReady: isDbReady,
     timestamp: new Date()
   });
 });
