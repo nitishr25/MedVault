@@ -237,15 +237,15 @@ export default function RegisterPage() {
           {/* Input 5 - Conditional Specialty Dropdown for Doctors */}
           {role === 'doctor' && (
             <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
-              <label className="text-xs font-semibold text-amber-400/80 tracking-wider uppercase block">
+              <label className="text-xs font-semibold text-teal-400/80 tracking-wider uppercase block">
                 Clinical Specialty (Required)
               </label>
               <div className="relative group/input">
-                <Stethoscope className="absolute left-3.5 top-3.5 h-4 w-4 text-amber-500/50 group-focus-within/input:text-amber-400 transition-colors" />
+                <Stethoscope className="absolute left-3.5 top-3.5 h-4 w-4 text-teal-500/50 group-focus-within/input:text-teal-400 transition-colors" />
                 <select
                   value={specialty}
                   onChange={(e) => setSpecialty(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-amber-500/20 bg-slate-950/80 pl-11 pr-10 text-slate-200 text-sm focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 transition-all appearance-none cursor-pointer"
+                  className="h-11 w-full rounded-xl border border-teal-500/20 bg-slate-950/80 pl-11 pr-10 text-slate-200 text-sm focus:outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/20 transition-all appearance-none cursor-pointer"
                   disabled={isLoading}
                   required={role === 'doctor'}
                 >
@@ -263,7 +263,7 @@ export default function RegisterPage() {
                   <option value="Radiologist" className="bg-slate-950 text-slate-300">Radiologist</option>
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
-                  <Sparkles className="h-4 w-4 text-amber-500/50" />
+                  <Sparkles className="h-4 w-4 text-teal-500/50" />
                 </div>
               </div>
               <p className="text-[10px] text-slate-500 mt-1">Specialty will be visible to patients requesting connection.</p>

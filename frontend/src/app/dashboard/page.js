@@ -839,8 +839,8 @@ export default function PremiumDashboard() {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
         <div className="max-w-md w-full bg-slate-900/50 border border-slate-800 p-8 rounded-3xl text-center space-y-6">
-          <div className="h-20 w-20 bg-amber-500/10 border border-amber-500/20 rounded-full flex items-center justify-center mx-auto shadow-[0_0_40px_rgba(245,158,11,0.1)]">
-            <ShieldAlert className="h-10 w-10 text-amber-500" />
+          <div className="h-20 w-20 bg-teal-500/10 border border-teal-500/20 rounded-full flex items-center justify-center mx-auto shadow-[0_0_40px_rgba(20,184,166,0.1)]">
+            <ShieldAlert className="h-10 w-10 text-teal-400" />
           </div>
           <div className="space-y-2">
             <h2 className="text-xl font-black text-white tracking-wide">Verification Pending</h2>
@@ -1086,10 +1086,10 @@ export default function PremiumDashboard() {
             </div>
 
             <div className="bg-slate-900/20 backdrop-blur-2xl border border-slate-900 p-2 sm:p-5 rounded-lg sm:rounded-2xl relative overflow-hidden group">
-              <div className="absolute top-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-sky-500/20 to-transparent group-hover:via-sky-500/40 transition-all duration-700" />
+              <div className="absolute top-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-teal-500/20 to-transparent group-hover:via-teal-500/40 transition-all duration-700" />
               <div className="flex items-center justify-between mb-1 sm:mb-3">
                 <span className="text-[8px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Records</span>
-                <Database className="h-3 w-3 sm:h-4 sm:w-4 text-sky-400 shrink-0 ml-1" />
+                <Database className="h-3 w-3 sm:h-4 sm:w-4 text-teal-400 shrink-0 ml-1" />
               </div>
               <h3 className="text-xs sm:text-2xl font-black text-white tracking-tight font-mono">
                 {isLoading ? "SYNC" : String(
@@ -1101,10 +1101,10 @@ export default function PremiumDashboard() {
             </div>
 
             <div className="bg-slate-900/20 backdrop-blur-2xl border border-slate-900 p-2 sm:p-5 rounded-lg sm:rounded-2xl relative overflow-hidden group">
-              <div className="absolute top-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-purple-500/20 to-transparent group-hover:via-purple-500/40 transition-all duration-700" />
+              <div className="absolute top-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-teal-500/20 to-transparent group-hover:via-teal-500/40 transition-all duration-700" />
               <div className="flex items-center justify-between mb-1 sm:mb-3">
                 <span className="text-[8px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Role</span>
-                <UserCheck className="h-3 w-3 sm:h-4 sm:w-4 text-purple-400 shrink-0 ml-1" />
+                <UserCheck className="h-3 w-3 sm:h-4 sm:w-4 text-teal-400 shrink-0 ml-1" />
               </div>
               <h3 className="text-xs sm:text-2xl font-black text-white tracking-tight capitalize truncate">{currentUser?.role}</h3>
             </div>
@@ -1155,7 +1155,7 @@ export default function PremiumDashboard() {
                               {patientRoster.length}
                             </span>
                           </div>
-                          <div className="h-6 w-6 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 order-1 sm:order-2">
+                          <div className="h-6 w-6 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 shrink-0 order-1 sm:order-2">
                             <UserCheck className="h-3 w-3 sm:h-4 sm:w-4" />
                           </div>
                         </div>
@@ -1168,7 +1168,7 @@ export default function PremiumDashboard() {
                               {dashboardStats?.pendingRequests?.length || 0}
                             </span>
                           </div>
-                          <div className="h-6 w-6 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0 order-1 sm:order-2">
+                          <div className="h-6 w-6 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 shrink-0 order-1 sm:order-2">
                             <UserPlus className="h-3 w-3 sm:h-4 sm:w-4" />
                           </div>
                         </div>
@@ -1183,7 +1183,7 @@ export default function PremiumDashboard() {
                               Active
                             </span>
                           </div>
-                          <div className="h-6 w-6 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0 order-1 sm:order-2">
+                          <div className="h-6 w-6 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 shrink-0 order-1 sm:order-2">
                             <Activity className="h-3 w-3 sm:h-4 sm:w-4" />
                           </div>
                         </div>
@@ -1256,7 +1256,7 @@ export default function PremiumDashboard() {
                               {patientConnections.filter(c => c.status === 'active').length}
                             </span>
                           </div>
-                          <div className="h-6 w-6 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0 order-1 sm:order-2">
+                          <div className="h-6 w-6 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 shrink-0 order-1 sm:order-2">
                             <UserCheck className="h-3 w-3 sm:h-4 sm:w-4" />
                           </div>
                         </div>
@@ -1271,8 +1271,8 @@ export default function PremiumDashboard() {
                       <div className="bg-slate-950/40 border border-slate-900 rounded-2xl overflow-hidden mb-8 shadow-[0_8px_30px_rgb(0,0,0,0.4)]">
                         <div className="p-4 sm:p-5 border-b border-slate-900/80 bg-slate-950/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="h-8 w-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-                              <ShieldAlert className="h-4 w-4 text-amber-500" />
+                            <div className="h-8 w-8 rounded-lg bg-teal-500/10 border border-teal-500/20 flex items-center justify-center shrink-0">
+                              <ShieldAlert className="h-4 w-4 text-teal-400" />
                             </div>
                             <h3 className="text-sm font-bold text-white tracking-wide uppercase truncate">
                               Pending Operator Verifications
@@ -1367,8 +1367,8 @@ export default function PremiumDashboard() {
                       {/* --- CARD 2: ACTIVE CLINICAL PERSONNEL WORKLOAD --- */}
                       <div className="bg-slate-950/40 border border-slate-900 rounded-2xl overflow-hidden mb-6 shadow-[0_8px_30px_rgb(0,0,0,0.4)]">
                         <div className="p-4 sm:p-5 border-b border-slate-900/80 bg-slate-950/60 flex items-center gap-3">
-                          <div className="h-8 w-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                            <Users className="h-4 w-4 text-blue-500" />
+                          <div className="h-8 w-8 rounded-lg bg-teal-500/10 border border-teal-500/20 flex items-center justify-center">
+                            <Users className="h-4 w-4 text-teal-400" />
                           </div>
                           <h3 className="text-sm font-bold text-white tracking-wide">Active Clinical Personnel</h3>
                         </div>
@@ -1527,7 +1527,7 @@ export default function PremiumDashboard() {
                       <div className={`bg-slate-950/40 border border-slate-900 rounded-2xl p-4 sm:p-5 flex flex-col justify-between ${currentUser?.role !== 'super_admin' ? 'lg:col-span-3' : ''}`}>
                         <div className="space-y-4">
                           <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                            <Clock className="h-3.5 w-3.5 text-indigo-400" /> Recent Activity
+                            <Clock className="h-3.5 w-3.5 text-teal-400" /> Recent Activity
                           </h4>
 
                           <div className="space-y-3.5">
@@ -1795,7 +1795,7 @@ export default function PremiumDashboard() {
                                               {(currentUser?.role === 'patient' || currentUser?.role === 'admin' || currentUser?.role === 'hospital_admin') && (
                                                 <button
                                                   onClick={() => openShareModal(record)}
-                                                  className="px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-[11px] font-bold text-purple-400 hover:bg-purple-500 hover:text-slate-950 transition-all flex items-center gap-1.5"
+                                                  className="px-3 py-1.5 rounded-lg bg-teal-500/10 border border-teal-500/20 text-[11px] font-bold text-teal-400 hover:bg-teal-500 hover:text-slate-950 transition-all flex items-center gap-1.5"
                                                 >
                                                   <UserCheck className="h-3.5 w-3.5" /> Share
                                                 </button>
@@ -1845,7 +1845,7 @@ export default function PremiumDashboard() {
                                           {(currentUser?.role === 'patient' || currentUser?.role === 'admin' || currentUser?.role === 'hospital_admin') && (
                                             <button
                                               onClick={() => openShareModal(record)}
-                                              className="px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-[11px] font-bold text-purple-400 flex items-center gap-1.5"
+                                              className="px-3 py-1.5 rounded-lg bg-teal-500/10 border border-teal-500/20 text-[11px] font-bold text-teal-400 flex items-center gap-1.5"
                                             >
                                               <UserCheck className="h-3.5 w-3.5" /> Share
                                             </button>
@@ -2741,7 +2741,7 @@ export default function PremiumDashboard() {
                 <select
                   value={shareData.doctorEmail}
                   onChange={(e) => setShareData(prev => ({ ...prev, doctorEmail: e.target.value }))}
-                  className="h-11 w-full rounded-xl border border-slate-800 bg-slate-950/80 px-4 text-white text-sm focus:outline-none focus:border-purple-500 transition-colors"
+                  className="h-11 w-full rounded-xl border border-slate-800 bg-slate-950/80 px-4 text-white text-sm focus:outline-none focus:border-teal-500 transition-colors"
                   required
                 >
                   <option value="">-- Select an authorized operator --</option>
@@ -2755,9 +2755,9 @@ export default function PremiumDashboard() {
                 </select>
               </div>
 
-              <div className="bg-amber-500/5 border border-amber-500/10 rounded-xl p-3 flex gap-3">
-                <ShieldAlert className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                <p className="text-[10px] text-amber-500/80 leading-relaxed font-medium">
+              <div className="bg-teal-500/5 border border-teal-500/10 rounded-xl p-3 flex gap-3">
+                <ShieldAlert className="h-4 w-4 text-teal-400 shrink-0 mt-0.5" />
+                <p className="text-[10px] text-teal-400/80 leading-relaxed font-medium">
                   This action performs a cryptographic re-wrapping of the original Data Encryption Key using the recipient's public identifier.
                 </p>
               </div>
@@ -2773,7 +2773,7 @@ export default function PremiumDashboard() {
                 <button
                   type="submit"
                   disabled={shareData.isLoading || !shareData.doctorEmail}
-                  className="flex-1 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 text-xs font-bold text-purple-400 hover:bg-purple-500 hover:text-slate-950 transition-all flex items-center justify-center disabled:opacity-50"
+                  className="flex-1 h-10 rounded-xl bg-teal-500/20 border border-teal-500/30 text-xs font-bold text-teal-400 hover:bg-teal-500 hover:text-slate-950 transition-all flex items-center justify-center disabled:opacity-50"
                 >
                   {shareData.isLoading ? "Wrapping Key..." : "Grant Access"}
                 </button>
