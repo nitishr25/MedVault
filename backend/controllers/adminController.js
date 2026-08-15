@@ -172,23 +172,18 @@ export const getHospitalTelemetry = async (req, res) => {
     }).select('username specialty email _id');
 
     const staffLoad = await Promise.all(activeDoctors.map(async (doctor) => {
-      const connections = await Connection.find({ 
-        doctorId: doctor._id, 
-        status: 'active' 
+      const connections = await Connection.find({
+        doctorId: doctor._id,
+        status: 'active'
       }).select('patientId');
-      
+
       const patientIds = connections.map(c => c.patientId);
-      
-      const stringPatientIds = patientIds.map(id => String(id));
-      const queryTargetIds = [...patientIds, ...stringPatientIds];
-      
-      const recordCount = await Record.countDocuments({ 
-        $or: [
-          { user: { $in: queryTargetIds } },
-          { patient: { $in: queryTargetIds } },
-          { owner: { $in: queryTargetIds } },
-          { patientId: { $in: queryTargetIds } }
-        ]
+
+      // Count records this doctor actually has a decryption grant for, not every
+      // record their connected patients happen to own — a patient's total record
+      // count includes documents never shared with this doctor at all.
+      const recordCount = await Record.countDocuments({
+        'sharedAccess.recipient': doctor._id
       });
 
       return { 
