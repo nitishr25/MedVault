@@ -690,7 +690,11 @@ export default function PremiumDashboard() {
         recordWrappedKey = myAccessEntry.wrappedKey;
       }
 
-      const targetUrl = record.ipfsGatewayUrl || `https://gateway.pinata.cloud/ipfs/${record.ipfsHash}`;
+      // Always derive from the raw hash against our dedicated Pinata gateway rather than
+      // trusting the stored ipfsGatewayUrl — that field was written at upload time against
+      // the shared public gateway.pinata.cloud, which now Cloudflare-challenges most
+      // requests (429s). The dedicated gateway isn't subject to that shared rate limit.
+      const targetUrl = `https://orange-capable-rook-986.mypinata.cloud/ipfs/${record.ipfsHash}`;
       const response = await fetch(targetUrl);
       if (!response.ok) throw new Error('Failed to fetch file from IPFS network');
 

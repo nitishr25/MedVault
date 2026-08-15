@@ -67,7 +67,9 @@ const uploadRecord = async (req, res, next) => {
     );
 
     const ipfsHash = pinataResponse.data.IpfsHash;
-    const ipfsGatewayUrl = `${process.env.IPFS_GATEWAY_BASE_URL || 'https://gateway.pinata.cloud/ipfs'}/${ipfsHash}`;
+    // The shared public gateway.pinata.cloud now Cloudflare-challenges most requests
+    // (429s) — use the account's dedicated gateway instead, which isn't rate-shared.
+    const ipfsGatewayUrl = `${process.env.IPFS_GATEWAY_BASE_URL || 'https://orange-capable-rook-986.mypinata.cloud/ipfs'}/${ipfsHash}`;
     const computedSizeInMB = `${(req.file.size / (1024 * 1024)).toFixed(2)} MB`;
 
     const record = await Record.create({
