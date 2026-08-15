@@ -224,9 +224,9 @@ export default function RegisterPage() {
                 disabled={isLoading}
                 required
               >
-                <option value="patient" className="bg-slate-950 text-slate-300">Patient (Record Owner Mode)</option>
-                <option value="doctor" className="bg-slate-950 text-slate-300">Doctor (Clinical Audit Mode)</option>
-                <option value="hospital_admin" className="bg-slate-950 text-slate-300">Hospital Admin (Infrastructure Node Mode)</option>
+                <option value="patient" className="bg-slate-950 text-slate-300">Patient </option>
+                <option value="doctor" className="bg-slate-950 text-slate-300">Doctor </option>
+                <option value="hospital_admin" className="bg-slate-950 text-slate-300">Hospital Admin </option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
                 <Sparkles className="h-4 w-4 text-slate-600" />
